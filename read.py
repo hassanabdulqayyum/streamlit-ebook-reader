@@ -1,6 +1,7 @@
 import streamlit as st
 from ebooklib import epub
 from bs4 import BeautifulSoup
+import io  # Import io for BytesIO
 
 # Colors for highlighting sentences
 colors = ["#ffd54f", "#aed581", "#64b5f6", "#f06292", "#ba68c8"]  # Lighter pastel shades
@@ -111,42 +112,49 @@ def main():
     uploaded_file = st.file_uploader("Choose an EPUB file", type="epub")
 
     if uploaded_file is not None:
-        # Read the EPUB file from the uploaded file
-        book = epub.read_epub(uploaded_file)
-    
-    # Initialize the chapter content
-    chapter_paragraphs = []
-    
-    # Extract the specific chapter
-    for item in book.get_items():
-        if item.get_name() == "9781416590354_Pt01Ch01.html":
-            # Parse the HTML content of the specific chapter
-            soup = BeautifulSoup(item.get_body_content(), 'html.parser')
-            # Use the get_processed_paragraphs function to get paragraphs
-            chapter_paragraphs = get_processed_paragraphs(soup)
-            break  # Assuming only one chapter to process
+        # Read the bytes from the uploaded file
+        file_bytes = uploaded_file.read()
+        # Create a BytesIO object
+        epub_file = io.BytesIO(file_bytes)
+        # Load the EPUB file
+        book = epub.read_epub(epub_file)
 
-    if not chapter_paragraphs:
-        st.error("Chapter not found in the EPUB file.")
-        return
+        # Initialize the chapter content
+        chapter_paragraphs = []
 
-    # Initialize session state for the paragraph index
-    if 'current_paragraph' not in st.session_state:
-        st.session_state.current_paragraph = 0
+        # You might want to allow the user to select a chapter here
+        # For the example, we'll process the first chapter available
+        for item in book.get_items():
+            if item.get_type() == epub.ITEM_DOCUMENT:
+                # Parse the HTML content of the chapter
+                soup = BeautifulSoup(item.get_body_content(), 'html.parser')
+                # Use the get_processed_paragraphs function to get paragraphs
+                chapter_paragraphs = get_processed_paragraphs(soup)
+                break  # Stop after processing the first chapter
 
-    # Display navigation buttons
-    col1, col2, col3 = st.columns([1, 1, 1])
-    with col1:
-        if st.button("Previous"):
-            if st.session_state.current_paragraph > 0:
-                st.session_state.current_paragraph -= 1
-    with col3:
-        if st.button("Next"):
-            if st.session_state.current_paragraph + 1 < len(chapter_paragraphs):
-                st.session_state.current_paragraph += 1
+        if not chapter_paragraphs:
+            st.error("No readable content found in the EPUB file.")
+            return
 
-    # Display the paragraphs
-    display_paragraphs(st.session_state.current_paragraph, chapter_paragraphs)
+        # Initialize session state for the paragraph index
+        if 'current_paragraph' not in st.session_state:
+            st.session_state.current_paragraph = 0
+
+        # Display navigation buttons
+        col1, col2, col3 = st.columns([1, 1, 1])
+        with col1:
+            if st.button("Previous"):
+                if st.session_state.current_paragraph > 0:
+                    st.session_state.current_paragraph -= 1
+        with col3:
+            if st.button("Next"):
+                if st.session_state.current_paragraph + 1 < len(chapter_paragraphs):
+                    st.session_state.current_paragraph += 1
+
+        # Display the paragraphs
+        display_paragraphs(st.session_state.current_paragraph, chapter_paragraphs)
+    else:
+        st.info("Please upload an EPUB file to begin reading.")
 
 if __name__ == "__main__":
     main()
