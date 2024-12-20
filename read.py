@@ -13,7 +13,10 @@ def get_color(index):
     return colors[index % len(colors)]
 
 def get_processed_paragraphs(soup):
-    # [Your existing implementation remains the same]
+    """
+    Processes the HTML soup to generate a list of paragraph contents.
+    Non-paragraph elements like captions and images are appended to the next paragraph.
+    """
     processed_paragraphs = []
     temp_content = ''
     p_tags = soup.find_all('p')
@@ -45,12 +48,16 @@ def get_processed_paragraphs(soup):
     return processed_paragraphs
 
 def display_paragraphs(paragraph_index, processed_paragraphs):
-    # [Your existing implementation remains the same]
-    display_paragraphs_list = processed_paragraphs[max(paragraph_index-1, 0):paragraph_index+2]
+    """
+    Displays three paragraphs at a time, highlighting the middle one.
+    Other elements like captions and images are displayed as part of the paragraph.
+    """
+    # Extract the three paragraphs to be displayed
+    display_paragraphs = processed_paragraphs[max(paragraph_index-1, 0):paragraph_index+2]
     
     html_content = ""
 
-    for i, paragraph_html in enumerate(display_paragraphs_list):
+    for i, paragraph_html in enumerate(display_paragraphs):
         # Define base font style for readability
         font_style = """
             font-family: Georgia, serif;
@@ -103,109 +110,68 @@ def display_paragraphs(paragraph_index, processed_paragraphs):
 def main():
     st.title("EPUB Reader")
 
-    # Initialize session state variables
-    if 'file_uploaded' not in st.session_state:
-        st.session_state['file_uploaded'] = False
-        st.session_state['book'] = None
+    # File uploader allows users to select an EPUB file
+    uploaded_file = st.file_uploader("Choose an EPUB file", type="epub")
 
-    if 'chapter_selected' not in st.session_state:
-        st.session_state['chapter_selected'] = False
-        st.session_state['selected_chapter_index'] = None
+    if uploaded_file is not None:
+        # Create a temporary file to store the EPUB file
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.epub') as tmp_file:
+            tmp_file.write(uploaded_file.getvalue())
+            tmp_file_path = tmp_file.name
 
-    if 'current_paragraph' not in st.session_state:
-        st.session_state['current_paragraph'] = 0
+        try:
+            # Load the EPUB file from the temporary file path
+            book = epub.read_epub(tmp_file_path)
+        except Exception as e:
+            st.error(f"An error occurred while reading the EPUB file: {e}")
+            return
+        finally:
+            # Clean up the temporary file
+            os.remove(tmp_file_path)
 
-    # Create placeholders
-    uploader_placeholder = st.empty()
-    chapter_select_placeholder = st.empty()
+        # Initialize the chapter content
+        chapters = []
+        chapter_titles = []
+        for item in book.get_items():
+            if item.get_type() == ebooklib.ITEM_DOCUMENT:
+                chapters.append(item)
+                # Attempt to get the chapter title
+                title = item.get_name()
+                # Alternatively, use item.get_title() if available
+                chapter_titles.append(title)
 
-    if not st.session_state['file_uploaded']:
-        uploaded_file = uploader_placeholder.file_uploader("Choose an EPUB file", type="epub")
-        if uploaded_file is not None:
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.epub') as tmp_file:
-                tmp_file.write(uploaded_file.getvalue())
-                tmp_file_path = tmp_file.name
-
-            try:
-                # Load the EPUB file from the temporary file path
-                book = epub.read_epub(tmp_file_path)
-                st.session_state['book'] = book
-                st.session_state['file_uploaded'] = True
-                uploader_placeholder.empty()  # Hide file uploader
-            except Exception as e:
-                st.error(f"An error occurred while reading the EPUB file: {e}")
-                st.session_state['file_uploaded'] = False
-                return
-            finally:
-                # Clean up the temporary file
-                os.remove(tmp_file_path)
-    else:
-        # Hide the uploader if the file is already uploaded
-        uploader_placeholder.empty()
-
-    if st.session_state['file_uploaded']:
-        if not st.session_state['chapter_selected']:
-            # Get chapters if not already retrieved
-            if 'chapters' not in st.session_state:
-                chapters = []
-                chapter_titles = []
-                for item in st.session_state['book'].get_items():
-                    if item.get_type() == ebooklib.ITEM_DOCUMENT:
-                        chapters.append(item)
-                        # Attempt to get the chapter title
-                        title = item.get_name()
-                        # Alternatively, use item.get_title() if available
-                        chapter_titles.append(title)
-                st.session_state['chapters'] = chapters
-                st.session_state['chapter_titles'] = chapter_titles
-
-            # Display the chapter selection widget
-            selected_chapter = chapter_select_placeholder.selectbox("Select a chapter", st.session_state['chapter_titles'])
-            if selected_chapter is not None:
-                st.session_state['selected_chapter_index'] = st.session_state['chapter_titles'].index(selected_chapter)
-                st.session_state['chapter_selected'] = True
-                chapter_select_placeholder.empty()  # Hide the chapter selector
-        else:
-            # Hide the chapter selector if a chapter is already selected
-            chapter_select_placeholder.empty()
-
-    if st.session_state['file_uploaded'] and st.session_state['chapter_selected']:
-        chapters = st.session_state['chapters']
-        chapter_paragraphs = st.session_state.get('chapter_paragraphs', None)
-        if chapter_paragraphs is None:
-            selected_item = chapters[st.session_state['selected_chapter_index']]
+        if chapters:
+            selected_chapter = st.selectbox("Select a chapter", chapter_titles)
+            chapter_index = chapter_titles.index(selected_chapter)
+            selected_item = chapters[chapter_index]
 
             # Parse the HTML content of the chapter
             soup = BeautifulSoup(selected_item.get_body_content(), 'html.parser')
             # Use the get_processed_paragraphs function to get paragraphs
             chapter_paragraphs = get_processed_paragraphs(soup)
-            st.session_state['chapter_paragraphs'] = chapter_paragraphs
 
-        # Display navigation buttons
-        col1, col2, col3 = st.columns([1, 1, 1])
-        with col1:
-            if st.button("Previous"):
-                if st.session_state['current_paragraph'] > 0:
-                    st.session_state['current_paragraph'] -= 1
-        with col3:
-            if st.button("Next"):
-                if st.session_state['current_paragraph'] + 1 < len(chapter_paragraphs):
-                    st.session_state['current_paragraph'] += 1
+            # Initialize session state for the paragraph index
+            if 'current_paragraph' not in st.session_state:
+                st.session_state.current_paragraph = 0
 
-        # Display the paragraphs
-        display_paragraphs(st.session_state['current_paragraph'], chapter_paragraphs)
+            # Display navigation buttons
+            col1, col2, col3 = st.columns([1, 1, 1])
+            with col1:
+                if st.button("Previous"):
+                    if st.session_state.current_paragraph > 0:
+                        st.session_state.current_paragraph -= 1
+            with col3:
+                if st.button("Next"):
+                    if st.session_state.current_paragraph + 1 < len(chapter_paragraphs):
+                        st.session_state.current_paragraph += 1
 
-        # Add a reset button
-        if st.button("Reset"):
-            # Clear the session state variables to reset the app
-            for key in list(st.session_state.keys()):
-                del st.session_state[key]
-            st.experimental_rerun()
+            # Display the paragraphs
+            display_paragraphs(st.session_state.current_paragraph, chapter_paragraphs)
+        else:
+            st.error("No readable content found in the EPUB file.")
+            return
     else:
-        if not st.session_state['file_uploaded']:
-            st.info("Please upload an EPUB file to begin reading.")
-        elif not st.session_state['chapter_selected']:
-            st.info("Please select a chapter to begin reading.")
+        st.info("Please upload an EPUB file to begin reading.")
 
 if __name__ == "__main__":
     main()
