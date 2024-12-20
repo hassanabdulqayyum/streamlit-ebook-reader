@@ -70,7 +70,6 @@ def display_paragraphs(paragraph_index, processed_paragraphs):
             bottom-margin: 40px;
             padding: 15px;
             border: 1px solid var(--primary-color);
-            box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.1);
             background-color: var(--background-color);
             transition: text-shadow 0.5s;
         """
