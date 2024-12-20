@@ -60,9 +60,9 @@ def display_paragraphs(paragraph_index, processed_paragraphs):
     for i, paragraph_html in enumerate(display_paragraphs):
         # Define base font style for readability
         font_style = """
-                font-family: Georgia, serif;
+                font-family: Palatino, serif;
                 font-weight: 400;
-                font-size: 20px;
+                font-size: 22px;
                 color: #333333;
                 line-height: 1.6;
                 max-width: 1000px;
