@@ -60,18 +60,19 @@ def display_paragraphs(paragraph_index, processed_paragraphs):
     for i, paragraph_html in enumerate(display_paragraphs):
         # Define base font style for readability
         font_style = """
-            font-family: Georgia, serif;
-            font-weight: 400;
-            font-size: 20px;  /* Adjusted font size for better readability */
-            color: #333333;
-            line-height: 1.6;
-            max-width: 1000px;
-            margin: 20px auto;
-            padding: 15px;
-            border: 1px solid #ddd;
-            box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.1);
-            background-color: #f7f7f7;
-            transition: text-shadow 0.5s;
+                font-family: Georgia, serif;
+                font-weight: 400;
+                font-size: 20px;  /* Adjusted font size for better readability */
+                color: #333333;
+                line-height: 1.6;
+                max-width: 1000px;
+                margin: 20px auto;
+                margin-bottom: 40px;  /* Added extra margin at the bottom for more space between paragraphs */
+                padding: 15px;
+                border: 1px solid #ddd;
+                box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.1);
+                background-color: #f7f7f7;
+                transition: text-shadow 0.5s;
         """
         highlighted_style = """
                 background-color: {color};
