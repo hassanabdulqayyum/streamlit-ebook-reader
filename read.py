@@ -65,7 +65,7 @@ def display_paragraphs(paragraph_index, processed_paragraphs):
             font-size: 40px;  /* Adjusted font size for better readability */
             color: #333333;
             line-height: 1.6;
-            max-width: 1200px;
+            max-width: 2000px;
             margin: 20px auto;
             padding: 15px;
             border: 1px solid #ddd;
