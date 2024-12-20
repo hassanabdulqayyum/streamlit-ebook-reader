@@ -47,82 +47,65 @@ def get_processed_paragraphs(soup):
     
     return processed_paragraphs
 
-def display_paragraphs(paragraph_index, processed_paragraphs, mode):
+def display_paragraphs(paragraph_index, processed_paragraphs):
     """
-    Displays three paragraphs at a time with mode-adjusted styling.
+    Displays three paragraphs at a time, highlighting the middle one.
+    Other elements like captions and images are displayed as part of the paragraph.
     """
-    # Define styles based on the mode
-    if mode == 'Light Mode':
-        font_style = """
-            font-family: Georgia, serif;
-            font-weight: 400;
-            font-size: 20px;
-            color: #333333;
-            line-height: 1.6;
-            max-width: 1000px;
-            margin: 40px auto;
-            padding: 15px;
-            border: 1px solid #ddd;
-            background-color: #f7f7f7;
-        """
-        highlighted_style = """
-            background-color: {color};
-            padding: 2px 5px;
-            border-radius: 5px;
-        """
-        colors = ["#ffd54f", "#aed581", "#64b5f6", "#f06292", "#ba68c8"]
-    else:  # Dark Mode
-        font_style = """
-            font-family: Georgia, serif;
-            font-weight: 400;
-            font-size: 20px;
-            color: #f0f0f0;
-            line-height: 1.6;
-            max-width: 1000px;
-            margin: 40px auto;
-            padding: 15px;
-            border: 1px solid #444;
-            background-color: #1e1e1e;
-        """
-        highlighted_style = """
-            background-color: {color};
-            padding: 2px 5px;
-            border-radius: 5px;
-        """
-        colors = ["#ffa500", "#90ee90", "#1e90ff", "#ff69b4", "#9370db"]
-    
-    # Extract the paragraphs to display
-    display_paragraphs = processed_paragraphs[max(paragraph_index - 1, 0):paragraph_index + 2]
+    # Extract the three paragraphs to be displayed
+    display_paragraphs = processed_paragraphs[max(paragraph_index-1, 0):paragraph_index+2]
     
     html_content = ""
 
     for i, paragraph_html in enumerate(display_paragraphs):
-        # Parse the paragraph HTML
+        # Define base font style for readability
+        font_style = """
+                font-family: Georgia, serif;
+                font-weight: 400;
+                font-size: 20px;
+                color: #333333;
+                line-height: 1.6;
+                max-width: 1000px;
+                margin: 20px auto;
+                margin-bottom: 40px;  /* Increased bottom margin for more space between paragraphs */
+                padding: 15px;
+                border: 1px solid #ddd;
+                box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.1);
+                background-color: #f7f7f7;
+                transition: text-shadow 0.5s;
+        """
+        highlighted_style = """
+                background-color: {color};
+                padding: 2px 5px;
+                border-radius: 5px;
+        """
+        
+        # Parse the paragraph_html to get the text
         soup = BeautifulSoup(paragraph_html, 'html.parser')
         
-        # Get the text content
+        # Get the combined text of the paragraph and any associated elements
         paragraph_text = ''
         for content in soup.contents:
             if content.name == 'p':
                 paragraph_text += content.get_text(separator=' ') + ' '
             else:
-                paragraph_text += str(content) + ' '
+                paragraph_text += str(content) + ' '  # Include images or other tags
         
-        # Determine if this paragraph is highlighted
+        # Highlight the middle paragraph (or first if at the beginning)
         is_highlighted = (paragraph_index == 0 and i == 0) or (paragraph_index != 0 and i == 1)
         
         if is_highlighted:
             sentences = paragraph_text.strip().split('. ')
             highlighted_sentence = [
-                f'<span style="{highlighted_style.format(color=get_color(j, colors))}">{sentence.strip()}{"." if not sentence.strip().endswith(".") else ""}</span>'
-                for j, sentence in enumerate(sentences)
-            ]
+                f'<span style="{highlighted_style.format(color=get_color(j))}">{sentence.strip()}{"." if not sentence.strip().endswith(".") else ""}</span>'
+                for j, sentence in enumerate(sentences)]
             paragraph_content = ' '.join(highlighted_sentence)
             html_content += f"<div style='{font_style}'>{paragraph_content}</div>"
         else:
+            # Include any images or captions in the paragraph_html
             html_content += f"<div style='{font_style}'>{paragraph_text}</div>"
     
-    # Display the content
+    # Display the HTML content using Streamlit
     st.write(html_content, unsafe_allow_html=True)
 
 def main():
@@ -131,11 +114,32 @@ def main():
     # Move file uploader to sidebar
     uploaded_file = st.sidebar.file_uploader("Choose an EPUB file", type="epub")
 
-    # Add mode selector in the sidebar
-    mode = st.sidebar.selectbox('Display Mode', ['Light Mode', 'Dark Mode'])
-
     if uploaded_file is not None:
-        # [Code for handling the EPUB file remains the same]
+        # Create a temporary file to store the EPUB file
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.epub') as tmp_file:
+            tmp_file.write(uploaded_file.getvalue())
+            tmp_file_path = tmp_file.name
+
+        try:
+            # Load the EPUB file from the temporary file path
+            book = epub.read_epub(tmp_file_path)
+        except Exception as e:
+            st.error(f"An error occurred while reading the EPUB file: {e}")
+            return
+        finally:
+            # Clean up the temporary file
+            os.remove(tmp_file_path)
+
+        # Initialize the chapter content
+        chapters = []
+        chapter_titles = []
+        for item in book.get_items():
+            if item.get_type() == ebooklib.ITEM_DOCUMENT:
+                chapters.append(item)
+                # Attempt to get the chapter title
+                title = item.get_name()
+                # Alternatively, use item.get_title() if available
+                chapter_titles.append(title)
 
         if chapters:
             # Move chapter selector to sidebar
@@ -143,7 +147,10 @@ def main():
             chapter_index = chapter_titles.index(selected_chapter)
             selected_item = chapters[chapter_index]
 
-            # [Code to process the chapter remains the same]
+            # Parse the HTML content of the chapter
+            soup = BeautifulSoup(selected_item.get_body_content(), 'html.parser')
+            # Use the get_processed_paragraphs function to get paragraphs
+            chapter_paragraphs = get_processed_paragraphs(soup)
 
             # Initialize session state for the paragraph index
             if 'current_paragraph' not in st.session_state:
@@ -160,10 +167,11 @@ def main():
                     if st.session_state.current_paragraph + 1 < len(chapter_paragraphs):
                         st.session_state.current_paragraph += 1
 
-            # Display the paragraphs with the selected mode
-            display_paragraphs(st.session_state.current_paragraph, chapter_paragraphs, mode)
+            # Display the paragraphs
+            display_paragraphs(st.session_state.current_paragraph, chapter_paragraphs)
         else:
             st.error("No readable content found in the EPUB file.")
+            return
     else:
         st.info("Please upload an EPUB file to begin reading.")
 
