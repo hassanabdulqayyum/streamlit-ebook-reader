@@ -62,10 +62,10 @@ def display_paragraphs(paragraph_index, processed_paragraphs):
         font_style = """
             font-family: Georgia, serif;
             font-weight: 400;
-            font-size: 20px;  /* Adjusted font size for better readability */
+            font-size: 40px;  /* Adjusted font size for better readability */
             color: #333333;
             line-height: 1.6;
-            max-width: 800px;
+            max-width: 1200px;
             margin: 20px auto;
             padding: 15px;
             border: 1px solid #ddd;
