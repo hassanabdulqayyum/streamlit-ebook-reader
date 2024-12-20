@@ -1,9 +1,9 @@
 import streamlit as st
+import ebooklib  # Import the ebooklib module
 from ebooklib import epub
 from bs4 import BeautifulSoup
 import tempfile
 import os
-import io
 
 # Colors for highlighting sentences
 colors = ["#ffd54f", "#aed581", "#64b5f6", "#f06292", "#ba68c8"]  # Lighter pastel shades
@@ -133,7 +133,7 @@ def main():
         chapters = []
         chapter_titles = []
         for item in book.get_items():
-            if item.get_type() == epub.ITEM_DOCUMENT:
+            if item.get_type() == ebooklib.ITEM_DOCUMENT:
                 chapters.append(item)
                 # Attempt to get the chapter title
                 title = item.get_name()
