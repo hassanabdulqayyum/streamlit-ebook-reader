@@ -13,7 +13,7 @@ def get_theme_colors():
        colors = ["#ff8a65", "#ffb74d", "#4fc3f7", "#ba68c8", "#e57373"]
    else:
        # Define colors suitable for light mode (lighter pastel shades)
-       colors = ["#ffd54f", "#aed581", "#64b5f6", "#f06292", "#ba68c8"]
+       colors = ["#ffd54f", "#aed581", "#64b5f6", "#f06292", "#9575cd"]
    return colors
 
 # Colors for highlighting sentences
