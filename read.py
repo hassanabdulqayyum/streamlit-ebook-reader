@@ -62,11 +62,12 @@ def display_paragraphs(paragraph_index, processed_paragraphs):
         font_style = """
                 font-family: Georgia, serif;
                 font-weight: 400;
-                font-size: 20px;  /* Adjusted font size for better readability */
+                font-size: 20px;
                 color: #333333;
                 line-height: 1.6;
                 max-width: 1000px;
-                margin: 40px auto;  /* Increased top and bottom margins to add more space */
+                margin: 20px auto;
+                margin-bottom: 40px;  /* Increased bottom margin for more space between paragraphs */
                 padding: 15px;
                 border: 1px solid #ddd;
                 box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.1);
