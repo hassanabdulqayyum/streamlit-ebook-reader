@@ -66,8 +66,7 @@ def display_paragraphs(paragraph_index, processed_paragraphs):
                 color: #333333;
                 line-height: 1.6;
                 max-width: 1000px;
-                margin: 20px auto;
-                margin-bottom: 80px;  /* Added extra margin at the bottom for more space between paragraphs */
+                margin: 40px auto;  /* Increased top and bottom margins to add more space */
                 padding: 15px;
                 border: 1px solid #ddd;
                 box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.1);
