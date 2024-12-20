@@ -107,6 +107,41 @@ def display_paragraphs(paragraph_index, processed_paragraphs):
     # Display the HTML content using Streamlit
     st.write(html_content, unsafe_allow_html=True)
 
+def get_chapter_title(item):
+    """
+    Attempts to extract the title of the chapter.
+
+    - Tries to get the title from the item's metadata.
+    - If not available, parses the HTML content to find <title> or heading tags.
+    - Falls back to the item's file name if necessary.
+    """
+    # Try to get the title from metadata
+    try:
+        title_meta = item.get_metadata('http://purl.org/dc/elements/1.1/', 'title')
+        if title_meta:
+            title = title_meta[0][0]
+            if title:
+                return title.strip()
+    except Exception:
+        pass
+
+    # Parse the HTML content
+    soup = BeautifulSoup(item.get_content(), 'html.parser')
+
+    # Try to find a <title> tag
+    title_tag = soup.find('title')
+    if title_tag and title_tag.string:
+        return title_tag.string.strip()
+
+    # Try to find the first heading tag
+    for heading in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
+        heading_tag = soup.find(heading)
+        if heading_tag and heading_tag.string:
+            return heading_tag.string.strip()
+
+    # Fallback to the item's file name
+    return item.get_name()
+
 def main():
     st.title("EPUB Reader")
 
@@ -152,8 +187,8 @@ def main():
         for item in book.get_items():
             if item.get_type() == ebooklib.ITEM_DOCUMENT:
                 chapters.append(item)
-                # Attempt to get the chapter title
-                title = item.get_title() or item.get_name()
+                # Get the chapter title
+                title = get_chapter_title(item)
                 chapter_titles.append(title)
 
         if chapters:
