@@ -71,7 +71,7 @@ def display_paragraphs(paragraph_index, processed_paragraphs):
     for i, paragraph_html in enumerate(display_paragraphs):
         # Define base font style for readability
         font_style = """
-               font-family: Palatino, serif;
+               font-family: New york, serif;
                font-weight: 400;
                font-size: 20px;
                color: var(--text-color);
