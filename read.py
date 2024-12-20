@@ -62,7 +62,7 @@ def display_paragraphs(paragraph_index, processed_paragraphs):
         font_style = """
             font-family: Georgia, serif;
             font-weight: 400;
-            font-size: 30px;  /* Adjusted font size for better readability */
+            font-size: 20px;  /* Adjusted font size for better readability */
             color: #333333;
             line-height: 1.6;
             max-width: 1200px;
