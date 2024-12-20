@@ -72,10 +72,10 @@ def display_paragraphs(paragraph_index, processed_paragraphs):
         # Define base font style for readability
         font_style = """
                font-family: Georgia, serif;
-               font-weight: 600;
+               font-weight: 500;
                font-size: 20px;
                color: var(--text-color);
-               line-height: 1.5;
+               line-height: 1.55;
                max-width: 1000px;
                margin: 20px auto;
                bottom-margin: 40px;
