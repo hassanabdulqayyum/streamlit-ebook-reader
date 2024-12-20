@@ -56,23 +56,22 @@ def display_paragraphs(paragraph_index, processed_paragraphs):
     display_paragraphs = processed_paragraphs[max(paragraph_index-1, 0):paragraph_index+2]
     
     html_content = ""
-
+    
     for i, paragraph_html in enumerate(display_paragraphs):
         # Define base font style for readability
         font_style = """
-                font-family: Palatino, serif;
-                font-weight: 400;
-                font-size: 22px;
-                color: #333333;
-                line-height: 1.6;
-                max-width: 1000px;
-                margin: 20px auto;
-                margin-bottom: 40px;  /* Increased bottom margin for more space between paragraphs */
-                padding: 15px;
-                border: 1px solid #ddd;
-                box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.1);
-                background-color: #f7f7f7;
-                transition: text-shadow 0.5s;
+            font-family: Palatino, serif;
+            font-weight: 400;
+            font-size: 20px;
+            color: var(--text-color);
+            line-height: 1.6;
+            max-width: 1000px;
+            margin: 40px auto;
+            padding: 15px;
+            border: 1px solid var(--primary-color);
+            box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.1);
+            background-color: var(--background-color);
+            transition: text-shadow 0.5s;
         """
         highlighted_style = """
                 background-color: {color};
