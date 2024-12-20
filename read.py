@@ -1,7 +1,9 @@
 import streamlit as st
 from ebooklib import epub
 from bs4 import BeautifulSoup
-import io  # Import io for BytesIO
+import tempfile
+import os
+import io
 
 # Colors for highlighting sentences
 colors = ["#ffd54f", "#aed581", "#64b5f6", "#f06292", "#ba68c8"]  # Lighter pastel shades
