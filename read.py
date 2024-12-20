@@ -5,8 +5,19 @@ from bs4 import BeautifulSoup
 import tempfile
 import os
 
+
+def get_theme_colors():
+   theme_mode = st.get_option('theme.base')
+   if theme_mode == 'dark':
+       # Define colors suitable for dark mode (brighter shades)
+       colors = ["#ff8a65", "#ffb74d", "#4fc3f7", "#ba68c8", "#e57373"]
+   else:
+       # Define colors suitable for light mode (lighter pastel shades)
+       colors = ["#ffd54f", "#aed581", "#64b5f6", "#f06292", "#ba68c8"]
+   return colors
+
 # Colors for highlighting sentences
-colors = ["#ffd54f", "#aed581", "#64b5f6", "#f06292", "#ba68c8"]  # Lighter pastel shades
+colors = get_theme_colors()
 
 def get_color(index):
     # Cycle through the color list based on the sentence index
