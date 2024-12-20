@@ -71,23 +71,24 @@ def display_paragraphs(paragraph_index, processed_paragraphs):
     for i, paragraph_html in enumerate(display_paragraphs):
         # Define base font style for readability
         font_style = """
-            font-family: Palatino, serif;
-            font-weight: 400;
-            font-size: 20px;
-            color: var(--text-color);
-            line-height: 1.6;
-            max-width: 1000px;
-            margin: 20px auto;
-            bottom-margin: 40px;
-            padding: 15px;
-            border: 1px solid var(--primary-color);
-            background-color: var(--background-color);
-            transition: text-shadow 0.5s;
+               font-family: Palatino, serif;
+               font-weight: 400;
+               font-size: 20px;
+               color: var(--text-color);
+               line-height: 1.6;
+               max-width: 1000px;
+               margin: 20px auto;
+               bottom-margin: 40px;
+               padding: 15px;
+               border: 1px solid var(--primary-color);
+               background-color: var(--background-color);
+               transition: text-shadow 0.5s;
         """
         highlighted_style = """
                 background-color: {color};
                 padding: 2px 5px;
                 border-radius: 5px;
+                color: var(--text-color);  /* Ensure text color matches theme's text color */
         """
         
         # Parse the paragraph_html to get the text
