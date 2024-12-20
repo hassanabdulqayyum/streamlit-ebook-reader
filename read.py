@@ -62,7 +62,7 @@ def display_paragraphs(paragraph_index, processed_paragraphs):
         font_style = """
             font-family: Georgia, serif;
             font-weight: 400;
-            font-size: 20px;
+            font-size: 20px;  /* Adjusted font size for better readability */
             color: #333333;
             line-height: 1.6;
             max-width: 1000px;
@@ -110,37 +110,24 @@ def display_paragraphs(paragraph_index, processed_paragraphs):
 def main():
     st.title("EPUB Reader")
 
-    # Initialize session state variables if they don't exist
-    if 'book' not in st.session_state:
-        st.session_state.book = None
-    if 'selected_chapter' not in st.session_state:
-        st.session_state.selected_chapter = None
-    if 'current_paragraph' not in st.session_state:
-        st.session_state.current_paragraph = 0
+    # Move file uploader to sidebar
+    uploaded_file = st.sidebar.file_uploader("Choose an EPUB file", type="epub")
 
-    # If no book is loaded, display the file uploader
-    if st.session_state.book is None:
-        uploaded_file = st.file_uploader("Choose an EPUB file", type="epub")
-        if uploaded_file is not None:
-            # Create a temporary file to store the EPUB file
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.epub') as tmp_file:
-                tmp_file.write(uploaded_file.getvalue())
-                tmp_file_path = tmp_file.name
+    if uploaded_file is not None:
+        # Create a temporary file to store the EPUB file
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.epub') as tmp_file:
+            tmp_file.write(uploaded_file.getvalue())
+            tmp_file_path = tmp_file.name
 
-            try:
-                # Load the EPUB file from the temporary file path
-                book = epub.read_epub(tmp_file_path)
-                st.session_state.book = book  # Store the book in session state
-            except Exception as e:
-                st.error(f"An error occurred while reading the EPUB file: {e}")
-                return
-            finally:
-                # Clean up the temporary file
-                os.remove(tmp_file_path)
-
-    # If book is loaded but chapter not selected, display the chapter selection
-    if st.session_state.book is not None and st.session_state.selected_chapter is None:
-        book = st.session_state.book
+        try:
+            # Load the EPUB file from the temporary file path
+            book = epub.read_epub(tmp_file_path)
+        except Exception as e:
+            st.error(f"An error occurred while reading the EPUB file: {e}")
+            return
+        finally:
+            # Clean up the temporary file
+            os.remove(tmp_file_path)
 
         # Initialize the chapter content
         chapters = []
@@ -154,52 +141,38 @@ def main():
                 chapter_titles.append(title)
 
         if chapters:
-            selected_chapter = st.selectbox("Select a chapter", chapter_titles)
-            if st.button("Load Chapter"):
-                chapter_index = chapter_titles.index(selected_chapter)
-                selected_item = chapters[chapter_index]
-                # Parse the HTML content of the chapter
-                soup = BeautifulSoup(selected_item.get_body_content(), 'html.parser')
-                # Use the get_processed_paragraphs function to get paragraphs
-                chapter_paragraphs = get_processed_paragraphs(soup)
-                st.session_state.selected_chapter = chapter_paragraphs  # Store in session state
+            # Move chapter selector to sidebar
+            selected_chapter = st.sidebar.selectbox("Select a chapter", chapter_titles)
+            chapter_index = chapter_titles.index(selected_chapter)
+            selected_item = chapters[chapter_index]
+
+            # Parse the HTML content of the chapter
+            soup = BeautifulSoup(selected_item.get_body_content(), 'html.parser')
+            # Use the get_processed_paragraphs function to get paragraphs
+            chapter_paragraphs = get_processed_paragraphs(soup)
+
+            # Initialize session state for the paragraph index
+            if 'current_paragraph' not in st.session_state:
+                st.session_state.current_paragraph = 0
+
+            # Display navigation buttons
+            col1, col2, col3 = st.columns([1, 1, 1])
+            with col1:
+                if st.button("Previous"):
+                    if st.session_state.current_paragraph > 0:
+                        st.session_state.current_paragraph -= 1
+            with col3:
+                if st.button("Next"):
+                    if st.session_state.current_paragraph + 1 < len(chapter_paragraphs):
+                        st.session_state.current_paragraph += 1
+
+            # Display the paragraphs
+            display_paragraphs(st.session_state.current_paragraph, chapter_paragraphs)
         else:
             st.error("No readable content found in the EPUB file.")
             return
-
-    # If both book and chapter are loaded, hide the upload and select widgets
-    if st.session_state.selected_chapter is not None:
-        chapter_paragraphs = st.session_state.selected_chapter
-
-        # Display navigation buttons
-        col1, col2, col3 = st.columns([1, 1, 1])
-        with col1:
-            if st.button("Previous"):
-                if st.session_state.current_paragraph > 0:
-                    st.session_state.current_paragraph -= 1
-        with col3:
-            if st.button("Next"):
-                if st.session_state.current_paragraph + 1 < len(chapter_paragraphs):
-                    st.session_state.current_paragraph += 1
-
-        # Display the paragraphs
-        display_paragraphs(st.session_state.current_paragraph, chapter_paragraphs)
-
-        # Provide an option to reset or select a different chapter
-        if st.button("Select a Different Chapter"):
-            st.session_state.selected_chapter = None
-            st.session_state.current_paragraph = 0
-
-        if st.button("Upload a New Book"):
-            st.session_state.book = None
-            st.session_state.selected_chapter = None
-            st.session_state.current_paragraph = 0
-
     else:
-        if st.session_state.book is not None:
-            st.info("Please select a chapter to begin reading.")
-        else:
-            st.info("Please upload an EPUB file to begin reading.")
+        st.info("Please upload an EPUB file to begin reading.")
 
 if __name__ == "__main__":
     main()
