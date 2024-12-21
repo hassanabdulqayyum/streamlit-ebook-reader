@@ -8,44 +8,6 @@ import nltk
 nltk.download('punkt')
 from nltk.tokenize import sent_tokenize
 
-
-def get_chapter_items(book):
-    """
-    Retrieves the chapter items and their titles from the book's TOC.
-    """
-    chapter_items = []
-    chapter_titles = []
-
-    # Get the Table of Contents
-    toc = book.get_toc()
-
-    # Flatten the nested TOC structure
-    def parse_toc(toc_items):
-        for item in toc_items:
-            if isinstance(item, epub.Link):
-                # This is a link (e.g., chapter)
-                href = item.href
-                title = item.title
-                # Find the corresponding item in the book
-                doc = book.get_item_with_href(href)
-                if doc:
-                    chapter_items.append(doc)
-                    chapter_titles.append(title)
-            elif isinstance(item, epub.Section):
-                # This is a section that may contain subsections or links
-                parse_toc(item.subitems)
-            elif isinstance(item, list):
-                # This is a nested list
-                parse_toc(item)
-            else:
-                pass  # Other types can be ignored for now
-
-    parse_toc(toc)
-
-    return chapter_items, chapter_titles
-
-
-
 def get_content_units(soup):
     """
     Processes the HTML content and returns a list of content units in the order they appear.
@@ -119,6 +81,20 @@ def get_content_units(soup):
             process_element(elem)
 
     return content_units
+
+def extract_chapter_title(item):
+    """
+    Extracts the chapter title from the EpubHtml item by parsing the content
+    and looking for heading tags or the <title> tag.
+    """
+    soup = BeautifulSoup(item.get_content(), 'html.parser')
+    # Try to find the first <h1>, <h2>, <h3>, or <title> tag
+    title_tag = soup.find(['h1', 'h2', 'h3', 'title'])
+    if title_tag:
+        return title_tag.get_text().strip()
+    else:
+        # Fallback to the item's file name if no title is found
+        return item.get_name()
 
 def get_display_content(paragraph_index, content_units):
     """
@@ -284,7 +260,50 @@ def main():
     # Inject CSS styles
     st.markdown("""
     <style>
-    /* (Include the CSS styles as before) */
+    :root {
+        /* Dark theme colors */
+        --color-1: #d32f2f;
+        --color-2: #1976d2;
+        --color-3: #388e3c;
+        --color-4: #512da8;
+        --color-5: #FBC02D;
+        --text-color: #FFFFFF;
+        --primary-color: #0E1117;
+    }
+
+    @media (prefers-color-scheme: light) {
+        :root {
+            /* Light theme colors */
+            --color-1: #ffd54f;
+            --color-2: #aed581;
+            --color-3: #64b5f6;
+            --color-4: #f06292;
+            --color-5: #FBC02D;
+            --text-color: #000000;
+            --primary-color: #FFFFFF;
+        }
+    }
+
+    /* Hide the Streamlit style elements (hamburger menu, header, footer) */
+    #MainMenu {visibility: hidden;}
+    header {visibility: hidden;}
+    footer {visibility: hidden;}
+
+    /* Responsive font sizes for mobile devices */
+    @media only screen and (max-width: 600px) {
+        div[style] {
+            font-size: 5vw !important;
+        }
+    }
+
+    ul, ol {
+        margin: 0;
+        padding-left: 1.5em;
+    }
+
+    li {
+        margin-bottom: 0.5em;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -309,8 +328,15 @@ def main():
             # Clean up the temporary file
             os.remove(tmp_file_path)
 
-        # Retrieve chapters and titles from TOC
-        chapters, chapter_titles = get_chapter_items(book)
+        # Initialize the chapter content
+        chapters = []
+        chapter_titles = []
+        for item in book.get_items():
+            if item.get_type() == ebooklib.ITEM_DOCUMENT:
+                chapters.append(item)
+                # Extract chapter title
+                title = extract_chapter_title(item)
+                chapter_titles.append(title)
 
         if chapters:
             # Move chapter selector to sidebar
