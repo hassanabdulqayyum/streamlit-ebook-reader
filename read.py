@@ -8,8 +8,8 @@ import os
 def get_theme_colors():
     theme_mode = st.get_option('theme.base')
     if theme_mode == 'dark':
-        # Now, changing the opacity here will reflect in the app
-        colors = ["#d32f2f", "#1976d2", "#388e3c", "#512da8", "rgba(251, 192, 45, 0.5)"]  # Semi-transparent yellow
+        # Now, changing the opacity here will reflect in the app #512da8
+        colors = ["#d32f2f", "#1976d2", "#388e3c", "#388e3c", "rgba(251, 192, 45, 0.5)"]  # Semi-transparent yellow
     else:
         # Define lighter pastel shades for light mode
         colors = ["#ffd54f", "#aed581", "#64b5f6", "#f06292", "#b39ddb"]
