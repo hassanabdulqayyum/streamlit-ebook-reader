@@ -34,9 +34,9 @@ def get_content_units(soup):
                     p_class = []
                 # Check if the paragraph is empty or a spacer
                 is_empty = not element.get_text(strip=True)
-                if is_empty:
-                    # Skip empty paragraphs or treat them as needed
-                    pass
+                if is_empty or 'spaceBreak1' in p_class:
+                    # Spacer or empty paragraph
+                    content_units.append({'type': 'spacer', 'content': str(element)})
                 elif 'caption' in p_class:
                     # Caption
                     content_units.append({'type': 'caption', 'content': str(element)})
@@ -46,9 +46,6 @@ def get_content_units(soup):
                 elif 'chapterSubtitle' in p_class or 'chapterSubtitle1' in p_class or 'chapterOpenerText' in p_class:
                     # Treat these as headings
                     content_units.append({'type': 'heading', 'content': str(element)})
-                elif 'spaceBreak1' in p_class:
-                    # Skip or treat as needed
-                    pass
                 else:
                     # Regular paragraph
                     content_units.append({'type': 'paragraph', 'content': str(element)})
@@ -131,7 +128,7 @@ def get_display_content(paragraph_index, content_units):
         idx = paragraph_pos - 1
         # Collect headings in reverse order until we hit a non-heading element
         headings = []
-        while idx >= 0 and content_units[idx]['type'] in ['heading', 'image', 'caption']:
+        while idx >= 0 and content_units[idx]['type'] in ['heading', 'image', 'caption', 'spacer']:
             if content_units[idx]['type'] == 'heading':
                 headings.insert(0, content_units[idx])  # Insert at the beginning
             idx -= 1
@@ -144,12 +141,9 @@ def get_display_content(paragraph_index, content_units):
 
         # Collect any non-paragraph content units immediately after the paragraph
         idx = paragraph_pos + 1
-        while idx < len(content_units) and content_units[idx]['type'] in ['caption', 'image', 'list']:
-            # Skip over empty paragraphs or spacers between paragraph and list
-            if content_units[idx]['type'] == 'paragraph':
-                idx += 1
-                continue
-            display_units.append(content_units[idx])
+        while idx < len(content_units) and content_units[idx]['type'] not in ['paragraph', 'heading']:
+            if content_units[idx]['type'] != 'spacer':
+                display_units.append(content_units[idx])
             idx += 1
 
     return display_units, paragraph_index
@@ -249,6 +243,9 @@ def display_paragraphs(display_units, paragraph_index, content_units):
             list_style = font_style + "padding-left: 40px; list-style-type: disc; border: none;"
             # Ensure list tags are wrapped in a <div> with the style
             html_content += f"<div style='{list_style}'>{content_html}</div>"
+        elif content_type == 'spacer':
+            # Skip spacers or add appropriate spacing if needed
+            pass
         else:
             # Default style for other content
             html_content += f"<div style='{font_style}'>{content_html}</div>"
@@ -345,7 +342,7 @@ def main():
             selected_item = chapters[chapter_index]
 
             # Parse the HTML content of the chapter
-            soup = BeautifulSoup(selected_item.get_body_content(), 'html.parser')
+            soup = BeautifulSoup(selected_item.get_content(), 'html.parser')
             # Use the get_content_units function to get content units
             content_units = get_content_units(soup)
 
