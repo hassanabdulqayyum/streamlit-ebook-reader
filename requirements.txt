@@ -5,3 +5,4 @@ lxml
 nltk
 markdownify
 markdown
+html2text
