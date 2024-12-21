@@ -118,7 +118,32 @@ def display_paragraphs(paragraph_index, processed_paragraphs):
     st.write(html_content, unsafe_allow_html=True)
 
 def main():
-    st.title("EPUB Reader")
+    # Set page configuration
+    st.set_page_config(layout="wide")
+
+    # Hide the Streamlit style elements (hamburger menu, header, footer)
+    hide_streamlit_style = """
+                <style>
+                #MainMenu {visibility: hidden;}
+                header {visibility: hidden;}
+                footer {visibility: hidden;}
+                </style>
+                """
+    st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+
+    # Responsive font sizes for mobile devices
+    responsive_styles = """
+        <style>
+        @media only screen and (max-width: 600px) {
+            div[style] {
+                font-size: 5vw !important;
+            }
+        }
+        </style>
+    """
+    st.markdown(responsive_styles, unsafe_allow_html=True)
+
+    st.title("Reader")
 
     # Move file uploader to sidebar
     uploaded_file = st.sidebar.file_uploader("Choose an EPUB file", type="epub")
