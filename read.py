@@ -8,11 +8,23 @@ import os
 def get_theme_colors():
     theme_mode = st.get_option('theme.base')
     if theme_mode == 'dark':
-        # Define darker colors suitable for dark mode
-        colors = ["#d32f2f", "#1976d2", "#388e3c", "#512da8", "#827717"]  # Updated yellow
+        # Define colors with adjusted opacity for dark mode
+        colors = [
+            "rgba(211, 47, 47, 0.7)",  # Red 700
+            "rgba(25, 118, 210, 0.7)",  # Blue 700
+            "rgba(56, 142, 60, 0.7)",   # Green 700
+            "rgba(81, 45, 168, 0.7)",   # Deep Purple 700
+            "rgba(255, 213, 79, 0.4)"   # Yellow 600 with lower opacity
+        ]
     else:
-        # Define lighter pastel shades for light mode
-        colors = ["#ffd54f", "#aed581", "#64b5f6", "#f06292", "#b39ddb"]
+        # Define colors for light mode
+        colors = [
+            "rgba(255, 213, 79, 1)",    # Yellow 600
+            "rgba(173, 213, 129, 1)",   # Light Green 300
+            "rgba(100, 181, 246, 1)",   # Light Blue 300
+            "rgba(240, 98, 146, 1)",    # Pink 300
+            "rgba(179, 157, 219, 1)"    # Purple 200
+        ]
     return colors
 
 def get_color(index):
@@ -83,10 +95,11 @@ def display_paragraphs(paragraph_index, processed_paragraphs):
                transition: text-shadow 0.5s;
         """
         highlighted_style = """
-                background-color: {color};
-                padding: 2px 5px;
-                border-radius: 5px;
-                color: var(--text-color);  /* Ensure text color matches theme's text color */
+            background-color: {color};
+            padding: 2px 5px;
+            border-radius: 5px;
+            color: var(--text-color);
+            {text_shadow}
         """
         
         # Parse the paragraph_html to get the text
@@ -104,11 +117,19 @@ def display_paragraphs(paragraph_index, processed_paragraphs):
         is_highlighted = (paragraph_index == 0 and i == 0) or (paragraph_index != 0 and i == 1)
         
         if is_highlighted:
-            # Get the colors based on the current theme
             sentences = paragraph_text.strip().split('. ')
-            highlighted_sentence = [
-                f'<span style="{highlighted_style.format(color=get_color(j))}">{sentence.strip()}{"." if not sentence.strip().endswith(".") else ""}</span>'
-                for j, sentence in enumerate(sentences)]
+            highlighted_sentence = []
+            for j, sentence in enumerate(sentences):
+                color = get_color(j)
+                # Check if the color is the yellow highlight
+                if '255, 213, 79' in color or 'ffd54f' in color:
+                    text_shadow = "text-shadow: 0px 0px 2px rgba(0, 0, 0, 0.8);"
+                else:
+                    text_shadow = ""
+                span_style = highlighted_style.format(color=color, text_shadow=text_shadow)
+                highlighted_sentence.append(
+                    f'<span style="{span_style}">{sentence.strip()}{"." if not sentence.strip().endswith(".") else ""}</span>'
+                )
             paragraph_content = ' '.join(highlighted_sentence)
             html_content += f"<div style='{font_style}'>{paragraph_content}</div>"
         else:
