@@ -1,89 +1,35 @@
 import streamlit as st
 import ebooklib
 from ebooklib import epub
+import lxml.html
 from lxml import etree
-from io import BytesIO
 import tempfile
 import os
 import nltk
+import re
 
-# Ensure NLTK resources are downloaded
+# Download NLTK data if not already present
 nltk.download('punkt', quiet=True)
 
-def get_processed_elements(xhtml_content):
-    """
-    Processes the XHTML content using lxml to generate an ordered list of elements,
-    preserving the document structure. Elements include headings, paragraphs,
-    images with captions, etc.
-    """
-    parser = etree.XMLParser(recover=True)
-    tree = etree.fromstring(xhtml_content, parser=parser)
-
-    # Namespace handling (EPUB content often uses namespaces)
-    namespaces = {'xhtml': 'http://www.w3.org/1999/xhtml'}
-
-    # Using XPath to select elements
-    body = tree.xpath('/xhtml:html/xhtml:body', namespaces=namespaces)
-    if not body:
-        return []
-    body = body[0]
-
-    # Extract elements in order
+def extract_chapter_elements(content):
+    """Extract elements from the chapter content, preserving order."""
+    # Parse the HTML content
+    tree = lxml.html.fromstring(content)
+    # Extract elements
     elements = []
-    for elem in body.iter():
-        tag = etree.QName(elem).localname
-        if tag in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
-            elements.append({
-                'type': 'heading',
-                'level': int(tag[1]),  # Extract level from tag name
-                'content': ''.join(elem.itertext()).strip()
-            })
-        elif tag == 'p':
-            # Get the text content, including tail text
-            content = ''.join(elem.itertext()).strip()
-            # Skip empty paragraphs
-            if content:
-                elements.append({
-                    'type': 'paragraph',
-                    'content': content
-                })
-        elif tag == 'img':
-            # Handle images, possibly extract src and alt text
-            src = elem.get('src')
-            alt = elem.get('alt', '')
-            elements.append({
-                'type': 'image',
-                'src': src,
-                'alt': alt
-            })
-        elif tag == 'figure':
-            # Handle figures (images with captions)
-            img_elem = elem.find('.//xhtml:img', namespaces=namespaces)
-            caption_elem = elem.find('.//xhtml:figcaption', namespaces=namespaces)
-            if img_elem is not None:
-                src = img_elem.get('src')
-                alt = img_elem.get('alt', '')
-                caption = ''.join(caption_elem.itertext()).strip() if caption_elem is not None else ''
-                elements.append({
-                    'type': 'figure',
-                    'src': src,
-                    'alt': alt,
-                    'caption': caption
-                })
-        # You can add more handling for other tags like lists, tables, etc.
-
+    # Find the body element
+    body = tree.xpath('//body')[0]
+    # Iterate over the immediate children of body
+    for elem in body:
+        if elem.tag in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'img', 'figure', 'figcaption', 'div']:
+            elements.append(elem)
     return elements
 
-def display_elements(element_index, elements):
-    """
-    Displays three elements at a time, highlighting the middle one if it's a paragraph.
-    Other elements like headings, images, and captions are displayed appropriately.
-    """
+def display_elements(current_index, elements):
+    """Display three elements at a time, with middle one highlighted if it's a paragraph."""
     # Extract the three elements to be displayed
-    display_elements = elements[max(element_index-1, 0):element_index+2]
-
+    display_elements = elements[max(current_index-1, 0):current_index+2]
     html_content = ""
-
     for i, elem in enumerate(display_elements):
         # Define base font style for readability
         font_style = """
@@ -95,67 +41,55 @@ def display_elements(element_index, elements):
             max-width: 1000px;
             margin: 10px auto;
             padding: 15px;
-            border: 1px solid var(--primary-color);
             transition: text-shadow 0.5s;
         """
-
-        # Highlight the middle element (or first if at the beginning) if it's a paragraph
-        is_highlighted = (element_index == 0 and i == 0) or (element_index != 0 and i == 1)
-        is_paragraph = elem['type'] == 'paragraph'
-
-        if elem['type'] == 'heading':
-            # Render headings with appropriate sizes
-            heading_style = f"""
-                font-size: {28 - elem['level'] * 2}px;
-                font-weight: bold;
-                margin-top: {20 - elem['level'] * 2}px;
-            """
-            html_content += f"<div style='{heading_style}'>{elem['content']}</div>"
-        elif elem['type'] == 'paragraph':
-            paragraph_text = elem['content']
-            if is_highlighted and is_paragraph:
-                # Use NLTK to split sentences accurately
-                sentences = nltk.tokenize.sent_tokenize(paragraph_text)
-                highlighted_sentences = []
-                for j, sentence in enumerate(sentences):
-                    color_variable = f"var(--color-{j % 5 + 1})"
-                    highlighted_style = f"""
-                        background-color: {color_variable};
-                        padding: 2px 5px;
-                        border-radius: 5px;
-                        color: var(--text-color);
-                        position: relative;
-                        z-index: 1;
-                    """
-                    sentence_html = f'<span style="{highlighted_style}">{sentence.strip()}</span>'
-                    highlighted_sentences.append(sentence_html)
-                paragraph_content = ' '.join(highlighted_sentences)
-                html_content += f"<div style='{font_style}'>{paragraph_content}</div>"
+        # Highlight the middle element if it's a paragraph
+        is_middle = (current_index == 0 and i == 0) or (current_index != 0 and i == 1)
+        if is_middle and elem.tag == 'p':
+            # Use NLTK to split paragraph into sentences
+            paragraph_text = elem.text_content()
+            # Use NLTK for sentence tokenization
+            sentences = nltk.tokenize.sent_tokenize(paragraph_text)
+            highlighted_sentences = []
+            for j, sentence in enumerate(sentences):
+                color_variable = f"var(--color-{j%5 +1})"
+                highlighted_style = f"""
+                    background-color: {color_variable};
+                    padding: 2px 5px;
+                    border-radius: 5px;
+                    color: var(--text-color);
+                    position: relative;
+                    z-index: 1;
+                """
+                # Escape HTML special characters in sentence
+                sentence_escaped = etree.Element("span")
+                sentence_escaped.text = sentence.strip()
+                sentence_html = etree.tostring(sentence_escaped, method='html', encoding='unicode').replace('<span>', '').replace('</span>', '')
+                sentence_html = f'<span style="{highlighted_style}">{sentence_html}</span>'
+                highlighted_sentences.append(sentence_html)
+            paragraph_content = ' '.join(highlighted_sentences)
+            html_content += f"<div style='{font_style}'>{paragraph_content}</div>"
+        else:
+            # For headings, adjust the font size and weight
+            if elem.tag.startswith('h'):
+                # Adjust font size according to heading level
+                heading_level = int(elem.tag[1])
+                heading_style = font_style + f"font-size: {24 + (6 - heading_level) * 2}px; font-weight: bold;"
+                heading_text = elem.text_content()
+                html_content += f"<div style='{heading_style}'>{heading_text}</div>"
+            elif elem.tag == 'img':
+                # For images, handle appropriately if needed
+                pass  # Implement image handling if necessary
+            elif elem.tag == 'figure':
+                # For figures, include the inner HTML
+                figure_html = lxml.html.tostring(elem, encoding='unicode')
+                html_content += f"<div style='{font_style}'>{figure_html}</div>"
             else:
-                html_content += f"<div style='{font_style}'>{paragraph_text}</div>"
-        elif elem['type'] == 'image':
-            # Display images
-            img_html = f"<img src='data:image;base64,{get_base64_data(elem['src'])}' alt='{elem['alt']}' style='max-width:100%; height:auto;'>"
-            html_content += f"<div style='text-align:center;'>{img_html}</div>"
-        elif elem['type'] == 'figure':
-            # Display figures with captions
-            img_html = f"<img src='data:image;base64,{get_base64_data(elem['src'])}' alt='{elem['alt']}' style='max-width:100%; height:auto;'>"
-            caption_html = f"<div style='font-size:16px; color:grey;'>{elem['caption']}</div>"
-            html_content += f"<div style='text-align:center;'>{img_html}{caption_html}</div>"
-        # Handle other types as needed
-
+                # For other elements like captions, display them normally
+                elem_content = elem.text_content()
+                html_content += f"<div style='{font_style}'>{elem_content}</div>"
     # Display the HTML content using Streamlit
     st.write(html_content, unsafe_allow_html=True)
-
-def get_base64_data(src):
-    """
-    Helper function to get base64 encoded data for images.
-    """
-    # This function assumes that 'src' is the path to the image within the EPUB package.
-    # You'll need to extract the image data from the EPUB file.
-    # For simplicity, this function returns an empty string.
-    # You would need to implement this function to correctly display images.
-    return ''
 
 def main():
     # Inject CSS styles
@@ -167,9 +101,7 @@ def main():
         --color-2: #1976d2;
         --color-3: #388e3c;
         --color-4: #512da8;
-        --color-5: #fbc02d;
-        --text-color: #fff;
-        --primary-color: #2196f3;
+        --color-5: rgba(251, 192, 45, 0.9);
     }
 
     @media (prefers-color-scheme: light) {
@@ -179,9 +111,7 @@ def main():
             --color-2: #aed581;
             --color-3: #64b5f6;
             --color-4: #f06292;
-            --color-5: #fbc02d;
-            --text-color: #000;
-            --primary-color: #1976d2;
+            --color-5: rgba(251, 192, 45, 0.9); /* Adjust opacity here */
         }
     }
 
@@ -226,8 +156,11 @@ def main():
         for item in book.get_items():
             if item.get_type() == ebooklib.ITEM_DOCUMENT:
                 chapters.append(item)
-                # Attempt to get the chapter title from the item's metadata
-                title = item.get_name()
+                # Try to get the chapter title
+                if item.get_name():
+                    title = item.get_name()
+                else:
+                    title = 'Chapter'
                 chapter_titles.append(title)
 
         if chapters:
@@ -236,11 +169,11 @@ def main():
             chapter_index = chapter_titles.index(selected_chapter)
             selected_item = chapters[chapter_index]
 
-            # Use lxml to parse the XHTML content of the chapter
-            xhtml_content = selected_item.get_content()
-
-            # Get processed elements
-            elements = get_processed_elements(xhtml_content)
+            # Parse the HTML content of the chapter
+            content = selected_item.get_content()
+            content = content.decode('utf-8')  # Assuming UTF-8 encoding
+            # Use the extract_chapter_elements function to get elements
+            chapter_elements = extract_chapter_elements(content)
 
             # Initialize session state for the element index
             if 'current_element' not in st.session_state:
@@ -254,11 +187,11 @@ def main():
                         st.session_state.current_element -= 1
             with col3:
                 if st.button("Next"):
-                    if st.session_state.current_element + 1 < len(elements):
+                    if st.session_state.current_element + 1 < len(chapter_elements):
                         st.session_state.current_element += 1
 
             # Display the elements
-            display_elements(st.session_state.current_element, elements)
+            display_elements(st.session_state.current_element, chapter_elements)
         else:
             st.error("No readable content found in the EPUB file.")
             return
