@@ -5,86 +5,124 @@ from bs4 import BeautifulSoup
 import tempfile
 import os
 import re
+import bs4
 
-def get_content_elements(soup):
-    """
-    Processes the HTML soup to generate a list of content elements.
-    Each element is a dictionary with 'type' and 'content'.
-    Types can be 'paragraph', 'heading', 'image', 'caption', etc.
-    """
-    elements = []
-    paragraph_positions = []
-
-    def process_contents(parent):
-        for content in parent.contents:
-            if isinstance(content, str):
-                # Skip strings directly under the parent unless they have meaningful text
-                if content.strip():
-                    elements.append({'type': 'text', 'content': content.strip()})
-            else:
-                if content.name == 'p':
-                    elements.append({'type': 'paragraph', 'content': content})
-                    paragraph_positions.append(len(elements)-1)
-                    # Do not process contents of a paragraph further
-                    continue
-                elif content.name in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
-                    elements.append({'type': 'heading', 'content': content})
-                elif content.name == 'img':
-                    elements.append({'type': 'image', 'content': content})
-                elif content.name in ['figure', 'figcaption']:
-                    elements.append({'type': content.name, 'content': content})
-                else:
-                    elements.append({'type': 'other', 'content': content})
-
-                # Process the content's children recursively, for nested elements
-                if content.contents:
-                    process_contents(content)
-    body = soup.find('body')
-    if body:
-        process_contents(body)
-    else:
-        # If no body tag, process the whole soup
-        process_contents(soup)
-
-    return elements, paragraph_positions
-
-def get_display_range(paragraph_positions, current_paragraph_index, elements_length):
-    # Determine the start and end element indices to display
-    # For previous paragraph
-    if current_paragraph_index > 0:
-        start_element_index = min(paragraph_positions[current_paragraph_index -1], elements_length - 1)
-    else:
-        start_element_index = 0
-
-    # For end_element_index
-    if current_paragraph_index + 2 < len(paragraph_positions):
-        end_element_index = paragraph_positions[current_paragraph_index + 2]
-    else:
-        end_element_index = elements_length
-    return start_element_index, end_element_index
-
-def split_sentences(paragraph_text):
-    # A regex to split sentences, matching punctuation
-    # Avoid splitting at periods that are part of abbreviations or numbers
-    sentence_endings = re.compile(r'(?<!\w\.\w.)(?<![A-Z][a-z]\.)(?<=\.|\?|\!)\s')
-
-    sentences = sentence_endings.split(paragraph_text.strip())
+def split_sentences(text):
+    # Define a regex pattern for splitting sentences
+    # This pattern handles basic cases and will split on '. ', '!', '?' with consideration for abbreviations
+    # Here we use positive lookbehind and positive lookahead
+    sentence_endings = re.compile(
+        r'(?<=[.!?])\s+(?=[A-Z])'  # Sentence ends with .!? followed by space and capital letter
+    )
+    sentences = sentence_endings.split(text.strip())
     return sentences
 
-def display_paragraphs(current_paragraph_index, elements, paragraph_positions):
-    if not paragraph_positions:
-        st.error("No paragraphs found in this chapter.")
-        return
+def parse_chapter_content(soup):
+    """
+    Parses the HTML content of a chapter into a sequential list of content elements.
+    Each element is a dictionary with 'type' and 'content' keys.
+    """
+    content_elements = []
 
-    # Get the display range
-    start_index, end_index = get_display_range(paragraph_positions, current_paragraph_index, len(elements))
-    display_elements = elements[start_index:end_index]
+    body = soup.body
+    if not body:
+        # Maybe the content is directly under <html> or another tag
+        body = soup
 
-    current_element_idx = paragraph_positions[current_paragraph_index]
+    for element in body.children:
+        if isinstance(element, bs4.element.Tag):
+            tag_name = element.name.lower()
+            # Determine the type of the tag
+            if tag_name in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
+                # Heading
+                content_elements.append({'type': 'heading', 'content': str(element)})
+            elif tag_name == 'p':
+                # Paragraph
+                content_elements.append({'type': 'paragraph', 'content': str(element)})
+            elif tag_name == 'img':
+                # Image
+                content_elements.append({'type': 'image', 'content': str(element)})
+            elif tag_name == 'figure':
+                # Figure (could contain image and caption)
+                content_elements.append({'type': 'figure', 'content': str(element)})
+            elif tag_name == 'table':
+                # Table
+                content_elements.append({'type': 'table', 'content': str(element)})
+            elif tag_name == 'div' or tag_name == 'section':
+                # Handle nested structures recursively
+                nested_elements = parse_chapter_content(element)
+                content_elements.extend(nested_elements)
+            else:
+                # Other content, include if necessary
+                pass
+        elif isinstance(element, bs4.element.NavigableString):
+            # Text node
+            text = element.strip()
+            if text:
+                # Could be text outside of any tag
+                # We can choose to include it or ignore
+                pass
+    return content_elements
 
+def get_paragraph_indices(content_elements):
+    """
+    Returns a list of indices into content_elements where the elements are paragraphs.
+    """
+    paragraph_indices = []
+    for idx, element in enumerate(content_elements):
+        if element['type'] == 'paragraph':
+            paragraph_indices.append(idx)
+    return paragraph_indices
+
+def get_display_content(content_elements, paragraph_indices, current_paragraph_idx):
+    """
+    Returns display_elements and indices in display_elements to highlight.
+    """
+    # Get indices of previous, current, and next paragraphs
+    paragraph_idxs_to_use = []
+
+    # Previous paragraph
+    if current_paragraph_idx > 0:
+        paragraph_idxs_to_use.append(paragraph_indices[current_paragraph_idx -1])
+
+    # Current paragraph
+    paragraph_idxs_to_use.append(paragraph_indices[current_paragraph_idx])
+
+    # Next paragraph
+    if current_paragraph_idx +1 < len(paragraph_indices):
+        paragraph_idxs_to_use.append(paragraph_indices[current_paragraph_idx +1])
+
+    # Now, get the range in content_elements
+    start_idx = paragraph_idxs_to_use[0]
+    end_idx = paragraph_idxs_to_use[-1]
+
+    # Collect the display_elements
+    display_elements = content_elements[start_idx:end_idx+1]
+
+    # Determine the indices of paragraphs in display_elements to highlight
+    paragraph_positions_in_display = []
+    for idx in paragraph_idxs_to_use:
+        relative_idx = idx - start_idx
+        paragraph_positions_in_display.append(relative_idx)
+
+    # We can highlight the middle paragraph
+    middle_idx = len(paragraph_positions_in_display) // 2
+    highlighted_idx = paragraph_positions_in_display[middle_idx]
+    highlighted_indices = [highlighted_idx]
+
+    return display_elements, highlighted_indices
+
+def display_content(display_elements, highlighted_indices):
+    """
+    Displays the content elements, highlighting the paragraphs in highlighted_indices.
+    """
     html_content = ""
-    for idx, elem in enumerate(elements[start_index:end_index], start=start_index):
-        content_html = str(elem['content'])
+
+    for idx, element in enumerate(display_elements):
+        element_html = element['content']
+        element_type = element['type']
+
+        # Define base font style for readability
         font_style = """
             font-family: Georgia, serif;
             font-weight: 450;
@@ -98,46 +136,32 @@ def display_paragraphs(current_paragraph_index, elements, paragraph_positions):
             border: 1px solid var(--primary-color);
             transition: text-shadow 0.5s;
         """
-        if elem['type'] == 'heading':
-            font_style += "font-size: 24px; font-weight: bold;"
-            heading_text = elem['content'].get_text().strip()
-            html_content += f"<div style='{font_style}'>{heading_text}</div>"
-        elif elem['type'] == 'paragraph':
-            # Check if this is the current paragraph
-            if idx == current_element_idx:
-                # Highlight this paragraph
-                paragraph_text = elem['content'].get_text()
-                sentences = split_sentences(paragraph_text)
-                highlighted_sentences = []
-                for j, sentence in enumerate(sentences):
-                    color_variable = f"var(--color-{j % 5 +1})"
-                    highlighted_style = f"""
-                        background-color: {color_variable};
-                        padding: 2px 5px;
-                        border-radius: 5px;
-                        color: var(--text-color);
-                        position: relative;
-                        z-index: 1;
-                    """
-                    sentence_html = f'<span style="{highlighted_style}">{sentence.strip()}</span>'
-                    highlighted_sentences.append(sentence_html)
-                paragraph_content = ' '.join(highlighted_sentences)
-                html_content += f"<div style='{font_style}'>{paragraph_content}</div>"
-            else:
-                # Regular paragraph
-                paragraph_text = elem['content'].get_text()
-                paragraph_content = paragraph_text.strip()
-                html_content += f"<div style='{font_style}'>{paragraph_content}</div>"
-        elif elem['type'] == 'image':
-            # Handle images
-            img_src = elem['content'].get('src')
-            img_tag = f'<img src="{img_src}" alt="Image" style="max-width: 100%;">'
-            html_content += f"<div style='{font_style}'>{img_tag}</div>"
+
+        # If the element is a paragraph and is to be highlighted
+        if element_type == 'paragraph' and idx in highlighted_indices:
+            # Highlight the paragraph
+            paragraph_text = BeautifulSoup(element_html, 'html.parser').get_text()
+            # Split into sentences
+            sentences = split_sentences(paragraph_text)
+            highlighted_sentences = []
+            for j, sentence in enumerate(sentences):
+                color_variable = f"var(--color-{j%5 +1})"
+                highlighted_style = f"""
+                    background-color: {color_variable};
+                    padding: 2px 5px;
+                    border-radius: 5px;
+                    color: var(--text-color);
+                    position: relative;
+                    z-index: 1;
+                """
+                sentence_html = f'<span style="{highlighted_style}">{sentence.strip()}</span>'
+                highlighted_sentences.append(sentence_html)
+            paragraph_content = ' '.join(highlighted_sentences)
+            html_content += f"<div style='{font_style}'>{paragraph_content}</div>"
         else:
-            # Other types
-            other_text = elem['content'].get_text().strip() if hasattr(elem['content'], 'get_text') else content_html
-            if other_text:
-                html_content += f"<div style='{font_style}'>{other_text}</div>"
+            # Display element as is
+            html_content += f"<div style='{font_style}'>{element_html}</div>"
+
     # Display the HTML content using Streamlit
     st.write(html_content, unsafe_allow_html=True)
 
@@ -180,7 +204,7 @@ def main():
     </style>
     """, unsafe_allow_html=True)
 
-    st.title("EPUB Reader")
+    st.title("Reader")
 
     # Move file uploader to sidebar
     uploaded_file = st.sidebar.file_uploader("Choose an EPUB file", type="epub")
@@ -204,15 +228,13 @@ def main():
         # Initialize the chapter content
         chapters = []
         chapter_titles = []
-        image_items = {}
         for item in book.get_items():
             if item.get_type() == ebooklib.ITEM_DOCUMENT:
                 chapters.append(item)
-                # Use item.file_name for chapter titles
-                title = item.get_name() or item.file_name
+                # Attempt to get the chapter title
+                title = item.get_name()
+                # Alternatively, use item.get_title() if available
                 chapter_titles.append(title)
-            elif item.get_type() == ebooklib.ITEM_IMAGE:
-                image_items[item.get_name()] = item  # Collect images
 
         if chapters:
             # Move chapter selector to sidebar
@@ -221,43 +243,41 @@ def main():
             selected_item = chapters[chapter_index]
 
             # Parse the HTML content of the chapter
-            content = selected_item.get_content().decode('utf-8')
-            # Replace image src to display images
-            soup = BeautifulSoup(content, 'html.parser')
-            for img in soup.find_all('img'):
-                img_src = img.get('src')
-                # Get the image item from the images collected earlier
-                image_item = image_items.get(img_src)
-                if image_item:
-                    # Create a data URI for the image
-                    img_data = image_item.get_content()
-                    import base64
-                    data_uri = "data:image/jpeg;base64," + base64.b64encode(img_data).decode('utf-8')
-                    img['src'] = data_uri
+            soup = BeautifulSoup(selected_item.get_body_content(), 'html.parser')
 
-            # Use the get_content_elements function to get content
-            elements, paragraph_positions = get_content_elements(soup)
+            # Use the parse_chapter_content function to get content_elements
+            content_elements = parse_chapter_content(soup)
 
-            # Initialize session state for the paragraph index
-            if 'current_paragraph_index' not in st.session_state:
-                st.session_state.current_paragraph_index = 0
+            # Get the paragraph_indices
+            paragraph_indices = get_paragraph_indices(content_elements)
+
+            if not paragraph_indices:
+                st.error("No paragraphs found in the selected chapter.")
+                return
+
+            # Initialize session state for current_paragraph_idx
+            if 'current_paragraph_idx' not in st.session_state:
+                st.session_state.current_paragraph_idx = 0
 
             # Display navigation buttons
             col1, col2, col3 = st.columns([1, 1, 1])
             with col1:
                 if st.button("Previous"):
-                    if st.session_state.current_paragraph_index > 0:
-                        st.session_state.current_paragraph_index -= 1
+                    if st.session_state.current_paragraph_idx > 0:
+                        st.session_state.current_paragraph_idx -= 1
             with col3:
                 if st.button("Next"):
-                    if st.session_state.current_paragraph_index + 1 < len(paragraph_positions):
-                        st.session_state.current_paragraph_index += 1
+                    if st.session_state.current_paragraph_idx +1 < len(paragraph_indices):
+                        st.session_state.current_paragraph_idx += 1
 
-            # Display the paragraphs
-            display_paragraphs(st.session_state.current_paragraph_index, elements, paragraph_positions)
+            # Get the display content
+            display_elements, highlighted_indices = get_display_content(
+                content_elements, paragraph_indices, st.session_state.current_paragraph_idx)
+
+            # Display the content
+            display_content(display_elements, highlighted_indices)
         else:
             st.error("No readable content found in the EPUB file.")
-            return
     else:
         st.info("Please upload an EPUB file to begin reading.")
 
