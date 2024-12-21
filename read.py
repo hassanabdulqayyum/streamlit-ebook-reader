@@ -29,7 +29,12 @@ def get_content_units(soup):
                 p_class = element.get('class', [])
                 if not p_class:
                     p_class = []
-                if 'caption' in p_class:
+                # Check if the paragraph is empty or a spacer
+                is_empty = not element.get_text(strip=True)
+                if is_empty:
+                    # Skip empty paragraphs or treat them as needed
+                    pass
+                elif 'caption' in p_class:
                     # Caption
                     content_units.append({'type': 'caption', 'content': str(element)})
                 elif 'centerImage' in p_class:
@@ -71,27 +76,6 @@ def get_content_units(soup):
         # Start from the root if body is not found
         for elem in soup.contents:
             process_element(elem)
-
-    # Handle nested lists within paragraphs
-    # We'll scan paragraphs for any nested lists and extract them
-    updated_content_units = []
-    for cu in content_units:
-        if cu['type'] == 'paragraph':
-            soup = BeautifulSoup(cu['content'], 'html.parser')
-            lists = soup.find_all(['ul', 'ol'])
-            if lists:
-                # Remove lists from paragraph content and add them as separate content units
-                for lst in lists:
-                    # Remove the list from the paragraph
-                    lst.extract()
-                    # Add the list as a separate content unit
-                    updated_content_units.append({'type': 'list', 'content': str(lst)})
-                # Update the paragraph content without the lists
-                cu['content'] = str(soup)
-            updated_content_units.append(cu)
-        else:
-            updated_content_units.append(cu)
-    content_units = updated_content_units
 
     return content_units
 
@@ -222,6 +206,14 @@ def display_paragraphs(display_units, paragraph_index, content_units):
                         sentence_html = f'<span style="{highlighted_style}">{sentence.strip()}</span>'
                         highlighted_sentences.append(sentence_html)
                 paragraph_content = ' '.join(highlighted_sentences)
+
+                # Re-insert the lists that were not in sentences
+                if "__LIST_PLACEHOLDER_" in paragraph_content:
+                    for lst in lists:
+                        placeholder = f"__LIST_PLACEHOLDER_{id(lst)}__"
+                        if placeholder in paragraph_content:
+                            paragraph_content = paragraph_content.replace(placeholder, str(lst))
+
                 html_content += f"<div style='{font_style}'>{paragraph_content}</div>"
             else:
                 # Regular paragraph style
@@ -236,7 +228,8 @@ def display_paragraphs(display_units, paragraph_index, content_units):
             html_content += f"<div style='{image_style}'>{content_html}</div>"
         elif content_type == 'list':
             # Apply list style
-            list_style = font_style
+            list_style = font_style + "padding-left: 40px; list-style-type: disc;"
+            # Ensure list tags are wrapped in a <div> with the style
             html_content += f"<div style='{list_style}'>{content_html}</div>"
         else:
             # Default style for other content
