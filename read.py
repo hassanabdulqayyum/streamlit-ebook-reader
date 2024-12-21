@@ -1,44 +1,71 @@
 import streamlit as st
 import ebooklib
 from ebooklib import epub
+from bs4 import BeautifulSoup, Tag
 from markdownify import markdownify as md
-import bs4
-from bs4 import BeautifulSoup
 import tempfile
 import os
-import markdown
 
-def get_content_units(html_content):
+def get_content_units(soup):
     """
-    Converts HTML content to Markdown, splits into blocks, and returns content units.
+    Processes the HTML content and returns a list of content units in the order they appear.
     Each content unit is a dictionary with 'type' and 'content' keys.
     """
-    # Convert HTML to Markdown
-    md_content = md(html_content)
-    
-    # Split the content into blocks by double newlines
-    blocks = md_content.split('\n\n')
-    
     content_units = []
-    
-    for block in blocks:
-        block = block.strip()
-        if not block:
-            continue
 
-        if block.startswith('#'):
-            # Heading
-            content_units.append({'type': 'heading', 'content': block})
-        elif block.startswith('!['):
-            # Image
-            content_units.append({'type': 'image', 'content': block})
-        elif block.startswith(('* ', '- ', '+ ', '1. ')):
-            # List
-            content_units.append({'type': 'list', 'content': block})
+    def process_element(element):
+        """Recursively process element and its children."""
+        if isinstance(element, Tag):
+            # Identify the content type
+            content_type = None
+            if element.name in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
+                content_type = 'heading'
+            elif element.name == 'p':
+                p_class = element.get('class', [])
+                if not p_class:
+                    p_class = []
+                # Check for special paragraph classes
+                if 'caption' in p_class:
+                    content_type = 'caption'
+                elif 'centerImage' in p_class:
+                    content_type = 'image'
+                elif 'chapterSubtitle' in p_class or 'chapterSubtitle1' in p_class or 'chapterOpenerText' in p_class:
+                    content_type = 'heading'
+                elif 'spaceBreak1' in p_class:
+                    # Skip or handle as needed
+                    return
+                else:
+                    content_type = 'paragraph'
+            elif element.name in ['ul', 'ol']:
+                content_type = 'list'
+            elif element.name == 'div':
+                # Process children of the div
+                for child in element.contents:
+                    process_element(child)
+                return
+            else:
+                # For other tags, treat them based on their content
+                content_type = 'other'
+
+            # Convert the HTML element to Markdown
+            content_markdown = md(str(element), strip=["a"])
+
+            # Append the content unit
+            content_units.append({'type': content_type, 'content': content_markdown})
         else:
-            # Paragraph
-            content_units.append({'type': 'paragraph', 'content': block})
-            
+            # Ignore NavigableString and other types
+            pass
+
+    # Start processing from the body
+    body = soup.find('body')
+    if body:
+        for elem in body.contents:
+            process_element(elem)
+    else:
+        # Start from the soup if body is not found
+        for elem in soup.contents:
+            process_element(elem)
+
     return content_units
 
 def get_display_content(paragraph_index, content_units):
@@ -48,54 +75,51 @@ def get_display_content(paragraph_index, content_units):
     """
     # Build a list of indices of paragraphs
     paragraph_indices = [i for i, cu in enumerate(content_units) if cu['type'] == 'paragraph']
-    
+
     num_paragraphs = len(paragraph_indices)
-    
+
     # Handle the case where no paragraphs are found
     if num_paragraphs == 0:
         return [], paragraph_index
-    
+
     # Ensure paragraph_index is within bounds
     if paragraph_index < 0:
         paragraph_index = 0
     elif paragraph_index >= num_paragraphs:
         paragraph_index = num_paragraphs - 1
-    
+
     # Get indices for the three paragraphs
     indices_to_show = []
     for offset in [-1, 0, 1]:
         para_idx = paragraph_index + offset
         if 0 <= para_idx < num_paragraphs:
             indices_to_show.append(para_idx)
-    
+
     display_units = []
     for para_idx in indices_to_show:
         paragraph_pos = paragraph_indices[para_idx]
-    
+
         # Collect any headings immediately preceding the paragraph
         idx = paragraph_pos - 1
-        # Collect headings in reverse order until we hit a non-heading element
+        # Collect headings in reverse order until we hit a non-heading or non-caption element
         headings = []
-        while idx >= 0:
-            prev_cu = content_units[idx]
-            if prev_cu['type'] == 'heading':
-                headings.insert(0, prev_cu)  # Insert at the beginning
-            else:
-                break
+        while idx >= 0 and content_units[idx]['type'] in ['heading', 'caption']:
+            if content_units[idx]['type'] == 'heading':
+                headings.insert(0, content_units[idx])  # Insert at the beginning
             idx -= 1
-    
+
         # Add headings to display units
         display_units.extend(headings)
-    
+
         # Add the paragraph
         display_units.append(content_units[paragraph_pos])
-    
-        # Collect any non-paragraph content units immediately after the paragraph
+
+        # Collect any content units immediately after the paragraph that are not paragraphs
         idx = paragraph_pos + 1
-        while idx < len(content_units) and content_units[idx]['type'] in ['caption', 'image', 'list']:
+        while idx < len(content_units) and content_units[idx]['type'] != 'paragraph':
             display_units.append(content_units[idx])
             idx += 1
-    
+
     return display_units, paragraph_index
 
 def display_paragraphs(display_units, paragraph_index, content_units):
@@ -104,71 +128,52 @@ def display_paragraphs(display_units, paragraph_index, content_units):
     """
     # Build a list of indices of paragraphs
     paragraph_indices = [i for i, cu in enumerate(content_units) if cu['type'] == 'paragraph']
-    
+
     # Handle the case where no paragraphs are found
     if not paragraph_indices:
         st.warning("No paragraphs found in this chapter.")
         return
-    
+
     curr_para_pos = paragraph_indices[paragraph_index]
-    
-    # Prepare the HTML content
-    html_content = ""
-    
+
+    # Prepare the content for display
     for cu in display_units:
         content_type = cu['type']
-        content_md = cu['content']
+        content = cu['content']
+
         if content_type == 'heading':
-            # Convert Markdown to HTML
-            content_html = markdown.markdown(content_md)
             # Apply heading styles
-            heading_style = "font-size: 28px; font-weight: bold; margin-top: 30px;"
-            html_content += f"<div style='{heading_style}'>{content_html}</div>"
+            st.markdown(f"## {content}", unsafe_allow_html=True)
         elif content_type == 'paragraph':
-            # Convert Markdown to HTML
-            content_html = markdown.markdown(content_md)
             # Determine if this is the current paragraph to highlight
             if cu == content_units[curr_para_pos]:
                 # Highlight the paragraph
-                soup = markdown.markdown(content_md)
-                paragraph_text = BeautifulSoup(soup, 'html.parser').get_text()
-                sentences = paragraph_text.strip().split('. ')
+                # Split the paragraph into sentences
+                sentences = content.strip().split('. ')
                 highlighted_sentences = []
                 for j, sentence in enumerate(sentences):
                     color_variable = f"var(--color-{j%5 +1})"
-                    highlighted_style = f"""
-                        background-color: {color_variable};
-                        padding: 2px 5px;
-                        border-radius: 5px;
-                        color: var(--text-color);
-                    """
-                    if sentence.strip():
-                        # Ensure proper punctuation at the end
-                        if not sentence.endswith('.'):
-                            sentence += '.'
-                        sentence_html = f'<span style="{highlighted_style}">{sentence.strip()}</span>'
-                        highlighted_sentences.append(sentence_html)
+                    highlighted_style = f"background-color: {color_variable}; border-radius:5px; padding:2px;"
+                    if not sentence.endswith('.'):
+                        sentence += '.'
+                    highlighted_sentences.append(f"<span style='{highlighted_style}'>{sentence.strip()}</span>")
                 paragraph_content = ' '.join(highlighted_sentences)
-                html_content += f"<div>{paragraph_content}</div>"
+                st.markdown(paragraph_content, unsafe_allow_html=True)
             else:
-                # Regular paragraph style
-                html_content += f"<div>{content_html}</div>"
+                # Regular paragraph
+                st.markdown(content, unsafe_allow_html=True)
         elif content_type == 'list':
-            # Convert Markdown to HTML
-            content_html = markdown.markdown(content_md)
-            html_content += f"<div>{content_html}</div>"
+            # Display list
+            st.markdown(content, unsafe_allow_html=True)
+        elif content_type == 'caption':
+            # Display caption
+            st.markdown(f"*{content}*", unsafe_allow_html=True)
         elif content_type == 'image':
-            # Convert Markdown to HTML
-            content_html = markdown.markdown(content_md)
-            image_style = "display: flex; justify-content: center; margin: 20px 0;"
-            html_content += f"<div style='{image_style}'>{content_html}</div>"
+            # Display image (you may need additional logic to display images)
+            st.markdown(content, unsafe_allow_html=True)
         else:
-            # Default style
-            content_html = markdown.markdown(content_md)
-            html_content += f"<div>{content_html}</div>"
-    
-    # Display the HTML content using Streamlit
-    st.write(html_content, unsafe_allow_html=True)
+            # Other content
+            st.markdown(content, unsafe_allow_html=True)
 
 def main():
     # Inject CSS styles
@@ -203,12 +208,6 @@ def main():
     header {visibility: hidden;}
     footer {visibility: hidden;}
 
-    /* Responsive font sizes for mobile devices */
-    @media only screen and (max-width: 600px) {
-        div[style] {
-            font-size: 5vw !important;
-        }
-    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -251,9 +250,9 @@ def main():
             selected_item = chapters[chapter_index]
 
             # Parse the HTML content of the chapter
-            html_content = selected_item.get_body_content().decode('utf-8')
+            soup = BeautifulSoup(selected_item.get_body_content(), 'html.parser')
             # Use the get_content_units function to get content units
-            content_units = get_content_units(html_content)
+            content_units = get_content_units(soup)
 
             # Build a list of indices of paragraphs
             paragraph_indices = [i for i, cu in enumerate(content_units) if cu['type'] == 'paragraph']
