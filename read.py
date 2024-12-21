@@ -118,8 +118,6 @@ def display_paragraphs(paragraph_index, processed_paragraphs):
     st.write(html_content, unsafe_allow_html=True)
 
 def main():
-    # Set page configuration
-    st.set_page_config(layout="wide")
 
     # Hide the Streamlit style elements (hamburger menu, header, footer)
     hide_streamlit_style = """
