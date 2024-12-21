@@ -1,100 +1,99 @@
 import streamlit as st
 import ebooklib
 from ebooklib import epub
-from bs4 import BeautifulSoup, NavigableString
+from bs4 import BeautifulSoup
 import tempfile
 import os
 import nltk
-from nltk.tokenize import sent_tokenize
 
-# Download NLTK data files
-nltk.download('punkt')
-nltk.download('punkt_tab')
+# Ensure nltk punkt tokenizer is downloaded
+try:
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    nltk.download('punkt')
 
-def get_chapter_elements(soup):
+def split_into_sentences(text):
+    return nltk.sent_tokenize(text)
+
+def get_content_blocks(soup):
     """
-    Parses the chapter soup and returns a list of elements in order.
-    Each element is a dictionary with keys 'type' and 'content'.
-    Types can be 'heading', 'paragraph', 'image', 'caption', etc.
+    Processes the HTML soup to generate a list of content blocks.
+    Each block is a dict with keys 'type' and 'content'.
+    Type can be 'heading', 'paragraph', 'image', 'caption', 'other'.
     """
-    elements = []
-    for elem in soup.body.children:
-        if isinstance(elem, NavigableString):
+    content_blocks = []
+    body = soup.body or soup
+
+    for element in body.contents:
+        if isinstance(element, str):
+            if element.strip():
+                content_blocks.append({'type': 'text', 'content': element.strip()})
             continue
-        if elem.name in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
-            elements.append({'type': 'heading', 'content': elem.get_text(separator=' ').strip()})
-        elif elem.name == 'p':
-            # Check if paragraph is empty
-            text = elem.get_text(separator=' ').strip()
-            if text:
-                elements.append({'type': 'paragraph', 'content': text})
-        elif elem.name == 'img':
-            elements.append({'type': 'image', 'content': elem})
-        elif elem.name == 'figure':
-            # Figure may contain image and caption
-            imgs = elem.find_all('img')
-            for img in imgs:
-                elements.append({'type': 'image', 'content': img})
-            caption = elem.find('figcaption')
-            if caption:
-                elements.append({'type': 'caption', 'content': caption.get_text(separator=' ').strip()})
-        elif elem.name == 'div':
-            # Some EPUBs may use divs for different content
-            class_list = elem.get('class', [])
-            if 'caption' in class_list:
-                elements.append({'type': 'caption', 'content': elem.get_text(separator=' ').strip()})
+        if element.name in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
+            content_blocks.append({'type': 'heading', 'content': element})
+        elif element.name == 'p':
+            p_class = element.get('class', [])
+            if any('caption' in cls.lower() for cls in p_class):
+                content_blocks.append({'type': 'caption', 'content': element})
             else:
-                # Check for paragraphs within div
-                for child in elem.descendants:
-                    if isinstance(child, NavigableString):
-                        continue
-                    if child.name == 'p':
-                        text = child.get_text(separator=' ').strip()
-                        if text:
-                            elements.append({'type': 'paragraph', 'content': text})
+                content_blocks.append({'type': 'paragraph', 'content': element})
+        elif element.name == 'img':
+            content_blocks.append({'type': 'image', 'content': element})
+        elif element.name in ['div', 'section', 'article']:
+            # recursively process the contents
+            content_blocks.extend(get_content_blocks(element))
         else:
-            # Handle other elements if necessary
-            pass
+            content_blocks.append({'type': element.name, 'content': element})
 
-    return elements
+    return content_blocks
 
-def display_elements(element_index, elements):
+def display_content_blocks(block_index, content_blocks):
     """
-    Displays three elements at a time, highlighting the middle paragraph if it's a paragraph.
-    Other elements like headings, images, captions are displayed appropriately.
+    Displays three content blocks at a time, highlighting the middle one if it's a paragraph.
+    Other elements like captions and images are displayed appropriately.
     """
-    # Extract the three elements to be displayed
-    start_index = max(element_index - 1, 0)
-    end_index = min(element_index + 2, len(elements))
-    display_elements = elements[start_index:end_index]
+    # Extract the three content blocks to be displayed
+    display_blocks = content_blocks[max(block_index - 1, 0): block_index + 2]
 
     html_content = ""
 
-    default_font_style = """
-                font-family: Georgia, serif;
-                font-weight: 450;
-                font-size: 20px;
-                color: var(--text-color);
-                line-height: 1.6;
-                max-width: 700px;
-                margin: 10px auto;
-                bottom-margin: 20px;
-                padding: 15px;
-                border: 1px solid var(--primary-color);
-                transition: text-shadow 0.5s;
-            """
+    for i, block in enumerate(display_blocks):
+        block_type = block['type']
+        element = block['content']
 
-    for i, element in enumerate(display_elements):
-        # Determine if this is the middle element
-        is_middle_element = (i == 1) if element_index != 0 else (i == 0)
-        if element['type'] == 'paragraph':
-            paragraph_text = element['content']
-            if is_middle_element:
-                # Use nltk to tokenize sentences
-                sentences = sent_tokenize(paragraph_text)
+        # Define base font style for readability
+        font_style = """
+            font-family: Georgia, serif;
+            font-weight: 450;
+            font-size: 20px;
+            color: var(--text-color);
+            line-height: 1.6;
+            max-width: 1000px;
+            margin: 10px auto;
+            padding: 15px;
+            border: 1px solid var(--primary-color);
+            transition: text-shadow 0.5s;
+        """
+
+        if block_type == 'heading':
+            heading_style = font_style + """
+                font-weight: bold;
+                font-size: 24px;
+                text-align: center;
+            """
+            heading_text = element.get_text()
+            html_content += f"<div style='{heading_style}'>{heading_text}</div>"
+        elif block_type == 'paragraph':
+            # Highlight the middle paragraph (or first if at the beginning)
+            is_highlighted = (block_index == 0 and i == 0) or (block_index != 0 and i == 1)
+
+            paragraph_text = element.get_text()
+
+            if is_highlighted:
+                # Use NLTK's sentence tokenizer
+                sentences = split_into_sentences(paragraph_text)
                 highlighted_sentences = []
                 for j, sentence in enumerate(sentences):
-                    # Avoid splitting on references or abbreviations
                     color_variable = f"var(--color-{j%5 +1})"
                     highlighted_style = f"""
                         background-color: {color_variable};
@@ -104,59 +103,35 @@ def display_elements(element_index, elements):
                         position: relative;
                         z-index: 1;
                     """
-                    sentence = sentence.strip()
-                    # Ensure sentence ends with punctuation
-                    if not sentence.endswith(('.', '!', '?')):
-                        sentence += '.'
-                    sentence_html = f'<span style="{highlighted_style}">{sentence}</span>'
+                    # Escape HTML in sentence
+                    sentence_html = f'<span style="{highlighted_style}">{sentence.strip()}</span>'
                     highlighted_sentences.append(sentence_html)
                 paragraph_content = ' '.join(highlighted_sentences)
-                html_content += f"<div style='{default_font_style}'>{paragraph_content}</div>"
+                html_content += f"<div style='{font_style}'>{paragraph_content}</div>"
             else:
-                # Display paragraph normally
-                html_content += f"<div style='{default_font_style}'>{paragraph_text}</div>"
-        elif element['type'] == 'heading':
-            # Display heading
-            heading_text = element['content']
-            heading_style = """
-                font-family: Georgia, serif;
-                font-weight: 600;
-                font-size: 24px;
-                color: var(--text-color);
-                line-height: 1.6;
-                max-width: 800px;
-                margin: 20px auto 10px auto;
-                padding: 5px;
-                /* No border for headings */
-                border: none;
-            """
-            html_content += f"<h2 style='{heading_style}'>{heading_text}</h2>"
-        elif element['type'] == 'image':
-            # Display image if possible
-            # Note: This requires handling the image data from the EPUB
-            # For simplicity, we'll skip images or handle them if desired
-            pass
-        elif element['type'] == 'caption':
-            # Display caption
-            caption_text = element['content']
-            caption_style = """
-                font-family: Georgia, serif;
-                font-weight: 400;
-                font-size: 18px;
-                color: var(--text-color-secondary);
-                line-height: 1.4;
-                max-width: 700px;
-                margin: 5px auto;
-                padding: 5px;
+                html_content += f"<div style='{font_style}'>{paragraph_text}</div>"
+        elif block_type == 'image':
+            # Generate the img tag
+            img_html = str(element)
+            html_content += f"<div style='text-align: center;'>{img_html}</div>"
+        elif block_type == 'caption':
+            caption_style = font_style + """
                 font-style: italic;
+                font-size: 16px;
+                text-align: center;
             """
+            caption_text = element.get_text()
             html_content += f"<div style='{caption_style}'>{caption_text}</div>"
-        # ... other types as needed
+        else:
+            # For other types, render as is
+            other_html = str(element)
+            html_content += f"<div style='{font_style}'>{other_html}</div>"
 
     # Display the HTML content using Streamlit
     st.write(html_content, unsafe_allow_html=True)
 
 def main():
+
     # Inject CSS styles
     st.markdown("""
     <style>
@@ -167,8 +142,6 @@ def main():
         --color-3: #388e3c;
         --color-4: #512da8;
         --color-5: rgba(251, 192, 45, 0.9);
-        --text-color: #ffffff;
-        --text-color-secondary: #cccccc;
     }
 
     @media (prefers-color-scheme: light) {
@@ -179,8 +152,6 @@ def main():
             --color-3: #64b5f6;
             --color-4: #f06292;
             --color-5: rgba(251, 192, 45, 0.9); /* Adjust opacity here */
-            --text-color: #000000;
-            --text-color-secondary: #333333;
         }
     }
 
@@ -225,8 +196,9 @@ def main():
         for item in book.get_items():
             if item.get_type() == ebooklib.ITEM_DOCUMENT:
                 chapters.append(item)
-                # Get title from the EPUB's table of contents if available
+                # Attempt to get the chapter title from the TOC
                 title = item.get_name()
+                # Alternatively, you can parse the item content to find the title
                 chapter_titles.append(title)
 
         if chapters:
@@ -237,27 +209,26 @@ def main():
 
             # Parse the HTML content of the chapter
             soup = BeautifulSoup(selected_item.get_body_content(), 'html.parser')
+            # Use the get_content_blocks function to get content blocks
+            content_blocks = get_content_blocks(soup)
 
-            # Use the get_chapter_elements function to get elements
-            elements = get_chapter_elements(soup)
-
-            # Initialize session state for the element index
-            if 'current_element' not in st.session_state:
-                st.session_state.current_element = 0
+            # Initialize session state for the block index
+            if 'current_block' not in st.session_state:
+                st.session_state.current_block = 0
 
             # Display navigation buttons
             col1, col2, col3 = st.columns([1, 1, 1])
             with col1:
                 if st.button("Previous"):
-                    if st.session_state.current_element > 0:
-                        st.session_state.current_element -= 1
+                    if st.session_state.current_block > 0:
+                        st.session_state.current_block -= 1
             with col3:
                 if st.button("Next"):
-                    if st.session_state.current_element + 1 < len(elements):
-                        st.session_state.current_element += 1
+                    if st.session_state.current_block + 1 < len(content_blocks):
+                        st.session_state.current_block += 1
 
-            # Display the elements
-            display_elements(st.session_state.current_element, elements)
+            # Display the content blocks
+            display_content_blocks(st.session_state.current_block, content_blocks)
         else:
             st.error("No readable content found in the EPUB file.")
             return
