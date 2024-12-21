@@ -30,18 +30,15 @@ def get_content_units(soup):
                 p_class = element.get('class', [])
                 if not p_class:
                     p_class = []
-                if 'para' in p_class or 'chapterOpenerText' in p_class:
-                    # Regular paragraph
-                    content_units.append({'type': 'paragraph', 'content': str(element)})
-                elif 'caption' in p_class:
+                if 'caption' in p_class:
                     # Caption
                     content_units.append({'type': 'caption', 'content': str(element)})
                 elif 'centerImage' in p_class:
                     # Image (wrapped in a <p> tag)
                     content_units.append({'type': 'image', 'content': str(element)})
                 else:
-                    # Other paragraph types
-                    content_units.append({'type': 'other_p', 'content': str(element)})
+                    # Regular paragraph
+                    content_units.append({'type': 'paragraph', 'content': str(element)})
             elif element.name == 'div':
                 # Process children of the div
                 for child in element.contents:
@@ -53,8 +50,9 @@ def get_content_units(soup):
                 # List
                 content_units.append({'type': 'list', 'content': str(element)})
             else:
-                # Other tags
-                pass  # Ignore or handle as needed
+                # Process children of other tags
+                for child in element.contents:
+                    process_element(child)
         else:
             # Other element types
             pass
@@ -81,6 +79,10 @@ def get_display_content(paragraph_index, content_units):
 
     num_paragraphs = len(paragraph_indices)
 
+    # Handle the case where no paragraphs are found
+    if num_paragraphs == 0:
+        return [], paragraph_index
+
     # Ensure paragraph_index is within bounds
     if paragraph_index < 0:
         paragraph_index = 0
@@ -89,12 +91,12 @@ def get_display_content(paragraph_index, content_units):
 
     # Get the positions in content_units for the previous, current, and next paragraphs
     curr_para_pos = paragraph_indices[paragraph_index]
-    prev_para_pos = paragraph_indices[paragraph_index - 1] if paragraph_index > 0 else None
-    next_para_pos = paragraph_indices[paragraph_index + 1] if paragraph_index + 1 < num_paragraphs else None
+    prev_para_pos = paragraph_indices[paragraph_index - 1] if paragraph_index > 0 else curr_para_pos
+    next_para_pos = paragraph_indices[paragraph_index + 1] if paragraph_index + 1 < num_paragraphs else curr_para_pos
 
     # Determine start and end indices for slicing content_units
-    start_idx = prev_para_pos if prev_para_pos is not None else curr_para_pos
-    end_idx = next_para_pos if next_para_pos is not None else curr_para_pos
+    start_idx = prev_para_pos
+    end_idx = next_para_pos
 
     # Collect content units from start_idx to end_idx inclusive
     display_units = content_units[start_idx:end_idx + 1]
@@ -107,6 +109,12 @@ def display_paragraphs(display_units, paragraph_index, content_units):
     """
     # Build a list of indices of paragraphs
     paragraph_indices = [i for i, cu in enumerate(content_units) if cu['type'] == 'paragraph']
+
+    # Handle the case where no paragraphs are found
+    if not paragraph_indices:
+        st.warning("No paragraphs found in this chapter.")
+        return
+
     curr_para_pos = paragraph_indices[paragraph_index]
 
     # Prepare the HTML content
@@ -135,7 +143,9 @@ def display_paragraphs(display_units, paragraph_index, content_units):
             # Determine if this is the current paragraph to highlight
             if content_units.index(cu) == curr_para_pos:
                 # Highlight the paragraph
-                sentences = BeautifulSoup(content_html, 'html.parser').get_text().split('. ')
+                soup = BeautifulSoup(content_html, 'html.parser')
+                paragraph_text = soup.get_text()
+                sentences = paragraph_text.split('. ')
                 highlighted_sentences = []
                 for j, sentence in enumerate(sentences):
                     color_variable = f"var(--color-{j%5 +1})"
@@ -144,11 +154,10 @@ def display_paragraphs(display_units, paragraph_index, content_units):
                         padding: 2px 5px;
                         border-radius: 5px;
                         color: var(--text-color);
-                        position: relative;
-                        z-index: 1;
                     """
-                    sentence_html = f'<span style="{highlighted_style}">{sentence.strip()}{"." if not sentence.strip().endswith(".") else ""}</span>'
-                    highlighted_sentences.append(sentence_html)
+                    if sentence.strip():
+                        sentence_html = f'<span style="{highlighted_style}">{sentence.strip()}{"." if not sentence.strip().endswith(".") else ""}</span>'
+                        highlighted_sentences.append(sentence_html)
                 paragraph_content = ' '.join(highlighted_sentences)
                 html_content += f"<div style='{font_style}'>{paragraph_content}</div>"
             else:
