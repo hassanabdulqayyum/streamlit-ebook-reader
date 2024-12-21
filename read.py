@@ -118,10 +118,11 @@ def display_paragraphs(paragraph_index, processed_paragraphs):
     st.write(html_content, unsafe_allow_html=True)
 
 def main():
+    st.set_page_config(layout="wide")
     st.title("EPUB Reader")
 
-    # Move file uploader to sidebar
-    uploaded_file = st.sidebar.file_uploader("Choose an EPUB file", type="epub")
+    # Move file uploader to main page
+    uploaded_file = st.file_uploader("Choose an EPUB file", type="epub")
 
     if uploaded_file is not None:
         # Create a temporary file to store the EPUB file
@@ -151,8 +152,8 @@ def main():
                 chapter_titles.append(title)
 
         if chapters:
-            # Move chapter selector to sidebar
-            selected_chapter = st.sidebar.selectbox("Select a chapter", chapter_titles)
+            # Move chapter selector to main page
+            selected_chapter = st.selectbox("Select a chapter", chapter_titles)
             chapter_index = chapter_titles.index(selected_chapter)
             selected_item = chapters[chapter_index]
 
@@ -165,12 +166,14 @@ def main():
             if 'current_paragraph' not in st.session_state:
                 st.session_state.current_paragraph = 0
 
-            # Display navigation buttons
+            # Display navigation buttons centered
             col1, col2, col3 = st.columns([1, 1, 1])
             with col1:
                 if st.button("Previous"):
                     if st.session_state.current_paragraph > 0:
                         st.session_state.current_paragraph -= 1
+            with col2:
+                st.write(f"Paragraph {st.session_state.current_paragraph + 1} of {len(chapter_paragraphs)}")
             with col3:
                 if st.button("Next"):
                     if st.session_state.current_paragraph + 1 < len(chapter_paragraphs):
