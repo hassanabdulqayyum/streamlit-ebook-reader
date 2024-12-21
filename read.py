@@ -8,15 +8,18 @@ import os
 
 def process_chapter_content(soup):
     """
-    Processes the chapter content and returns a list of paragraphs.
-    Each paragraph includes associated elements (images, captions).
+    Processes the chapter content and returns a list of content blocks.
+    Each block is either a paragraph or a heading, along with its type.
     """
-    paragraphs = []
-    current_paragraph = {'text': '', 'elements': []}
+    content_blocks = []
+    current_paragraph = {'type': 'paragraph', 'text': '', 'elements': []}
+
+    # Define classes to identify different content types
     paragraph_classes = ['para', 'paraNoIndent', 'chapterOpenerText']
-    title_classes = ['chapterTitle', 'chapterNumber', 'chapterSubtitle', 'chapterSubtitle1', 'c2']
+    heading_classes = ['chapterTitle', 'chapterNumber', 'chapterSubtitle', 'chapterSubtitle1', 'c2']
     ignore_classes = ['spaceBreak1', 'centerImage']
     caption_classes = ['caption']
+
     # Iterate over elements in order
     for elem in soup.body.descendants:
         if isinstance(elem, bs4.element.Tag):
@@ -25,16 +28,21 @@ def process_chapter_content(soup):
                 if any(cls in paragraph_classes for cls in p_class):
                     # Save current paragraph if it has content
                     if current_paragraph['text'] or current_paragraph['elements']:
-                        paragraphs.append(current_paragraph)
-                        current_paragraph = {'text': '', 'elements': []}
+                        content_blocks.append(current_paragraph)
+                        current_paragraph = {'type': 'paragraph', 'text': '', 'elements': []}
                     # Start a new paragraph
                     current_paragraph['text'] = elem.get_text(separator=' ').strip()
                     # Collect images in the paragraph
                     for img in elem.find_all('img'):
                         current_paragraph['elements'].append(str(img))
-                elif any(cls in title_classes for cls in p_class):
-                    # Ignore titles in paragraphs
-                    pass
+                elif any(cls in heading_classes for cls in p_class):
+                    # Save current paragraph if it has content
+                    if current_paragraph['text'] or current_paragraph['elements']:
+                        content_blocks.append(current_paragraph)
+                        current_paragraph = {'type': 'paragraph', 'text': '', 'elements': []}
+                    # Append heading as a separate block
+                    heading_text = elem.get_text(separator=' ').strip()
+                    content_blocks.append({'type': 'heading', 'text': heading_text, 'elements': []})
                 elif any(cls in caption_classes for cls in p_class):
                     # Add captions to the current paragraph elements
                     current_paragraph['elements'].append(str(elem))
@@ -44,12 +52,17 @@ def process_chapter_content(soup):
                 else:
                     # Treat other <p> tags as part of the current paragraph elements
                     current_paragraph['elements'].append(str(elem))
+            elif elem.name in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
+                # Save current paragraph if it has content
+                if current_paragraph['text'] or current_paragraph['elements']:
+                    content_blocks.append(current_paragraph)
+                    current_paragraph = {'type': 'paragraph', 'text': '', 'elements': []}
+                # Append heading as a separate block
+                heading_text = elem.get_text(separator=' ').strip()
+                content_blocks.append({'type': 'heading', 'text': heading_text, 'elements': []})
             elif elem.name == 'img':
                 # Add images to the current paragraph elements
                 current_paragraph['elements'].append(str(elem))
-            elif elem.name in ['h1', 'h2', 'h3']:
-                # Ignore headings
-                pass
             elif elem.name == 'br':
                 # Line breaks; can be ignored or handled as needed
                 pass
@@ -59,64 +72,99 @@ def process_chapter_content(soup):
         elif isinstance(elem, bs4.element.NavigableString):
             text = elem.strip()
             if text:
-                if current_paragraph['text']:
-                    current_paragraph['text'] += ' ' + text
-                else:
-                    current_paragraph['text'] = text
+                current_paragraph['text'] += ' ' + text
+
     # Append the last paragraph if it exists
     if current_paragraph['text'] or current_paragraph['elements']:
-        paragraphs.append(current_paragraph)
-    return paragraphs
+        content_blocks.append(current_paragraph)
 
-def display_paragraphs(paragraph_index, paragraphs):
+    return content_blocks
+
+def display_paragraphs(paragraph_index, content_blocks):
     """
-    Displays three paragraphs at a time, highlighting the middle one.
+    Displays content blocks, highlighting the middle paragraph.
+    Headings are displayed distinctly from paragraphs.
     """
-    # Extract the three paragraphs to be displayed
-    display_paragraphs = paragraphs[max(paragraph_index-1, 0):paragraph_index+2]
+    # Find indices of the previous, current, and next paragraphs
+    paragraph_indices = [i for i, block in enumerate(content_blocks) if block['type'] == 'paragraph']
+    if not paragraph_indices:
+        st.write("No paragraphs to display.")
+        return
+
+    # Get the index positions in content_blocks
+    current_para_pos = paragraph_indices[paragraph_index]
+    prev_para_pos = paragraph_indices[paragraph_index - 1] if paragraph_index > 0 else None
+    next_para_pos = paragraph_indices[paragraph_index + 1] if paragraph_index + 1 < len(paragraph_indices) else None
+
+    # Collect content to display
+    display_indices = [idx for idx in [prev_para_pos, current_para_pos, next_para_pos] if idx is not None]
+
     html_content = ""
-    for i, para in enumerate(display_paragraphs):
-        # Define base font style for readability
-        font_style = """
-            font-family: Georgia, serif;
-            font-weight: 450;
-            font-size: 20px;
-            color: var(--text-color);
-            line-height: 1.6;
-            max-width: 800px;
-            margin: 10px auto;
-            padding: 15px;
-            border: 1px solid var(--primary-color);
-        """
-        # Combine the text and elements into the paragraph content
-        paragraph_content = para['text']
-        for elem_html in para['elements']:
-            paragraph_content += elem_html
-        # Highlight the middle paragraph
-        is_highlighted = (paragraph_index == 0 and i == 0) or (paragraph_index != 0 and i == 1)
-        if is_highlighted:
-            sentences = paragraph_content.strip().split('. ')
-            highlighted_sentences = []
-            for j, sentence in enumerate(sentences):
-                color_variable = f"var(--color-{j%5 +1})"
-                highlighted_style = f"""
-                    background-color: {color_variable};
-                    padding: 2px 5px;
-                    border-radius: 5px;
-                    color: var(--text-color);
-                    position: relative;
-                    z-index: 1;
-                """
-                # Ensure sentence ends with a period if not already present
-                if not sentence.strip().endswith('.'):
-                    sentence = sentence.strip() + '.'
-                sentence_html = f'<span style="{highlighted_style}">{sentence.strip()}</span>'
-                highlighted_sentences.append(sentence_html)
-            paragraph_html = ' '.join(highlighted_sentences)
-            html_content += f"<div style='{font_style}'>{paragraph_html}</div>"
+    for idx in range(len(content_blocks)):
+        block = content_blocks[idx]
+        if block['type'] == 'heading':
+            # Display heading
+            heading_style = """
+                font-family: Georgia, serif;
+                font-weight: bold;
+                font-size: 24px;
+                color: var(--text-color);
+                line-height: 1.6;
+                max-width: 800px;
+                margin: 20px auto 10px auto;
+                padding: 10px;
+                border-bottom: 2px solid var(--primary-color);
+            """
+            heading_html = f"<div style='{heading_style}'>{block['text']}</div>"
+            html_content += heading_html
+        elif idx in display_indices:
+            para = block
+            # Define base font style for readability
+            font_style = """
+                font-family: Georgia, serif;
+                font-weight: 450;
+                font-size: 20px;
+                color: var(--text-color);
+                line-height: 1.6;
+                max-width: 800px;
+                margin: 10px auto;
+                padding: 15px;
+                border: 1px solid var(--primary-color);
+            """
+            # Combine the text and elements into the paragraph content
+            paragraph_content = para['text']
+            for elem_html in para['elements']:
+                paragraph_content += elem_html
+
+            # Highlight the middle paragraph
+            is_highlighted = (idx == current_para_pos)
+            if is_highlighted:
+                sentences = paragraph_content.strip().split('. ')
+                highlighted_sentences = []
+                for j, sentence in enumerate(sentences):
+                    color_variable = f"var(--color-{j%5 +1})"
+                    highlighted_style = f"""
+                        background-color: {color_variable};
+                        padding: 2px 5px;
+                        border-radius: 5px;
+                        color: var(--text-color);
+                        position: relative;
+                        z-index: 1;
+                    """
+                    # Ensure sentence ends with a period if not already present
+                    if not sentence.strip().endswith('.'):
+                        sentence = sentence.strip() + '.'
+                    sentence_html = f'<span style="{highlighted_style}">{sentence.strip()}</span>'
+                    highlighted_sentences.append(sentence_html)
+                paragraph_html = ' '.join(highlighted_sentences)
+                html_content += f"<div style='{font_style}'>{paragraph_html}</div>"
+            else:
+                # Include any images or captions in the paragraph_html
+                html_content += f"<div style='{font_style}'>{paragraph_content}</div>"
         else:
-            # Include any images or captions in the paragraph_html
-            html_content += f"<div style='{font_style}'>{paragraph_content}</div>"
+            # For other paragraphs not in display indices, do nothing
+            continue
+
     # Display the HTML content using Streamlit
     st.write(html_content, unsafe_allow_html=True)
 
@@ -195,26 +243,32 @@ def main():
 
             # Parse the HTML content of the chapter
             soup = BeautifulSoup(selected_item.get_content(), 'html.parser')
-            # Use the process_chapter_content function to get paragraphs
-            paragraphs = process_chapter_content(soup)
+            # Use the process_chapter_content function to get content blocks
+            content_blocks = process_chapter_content(soup)
 
             # Initialize session state for the paragraph index
             if 'current_paragraph' not in st.session_state:
                 st.session_state.current_paragraph = 0
 
-            # Display navigation buttons
-            col1, col2, col3 = st.columns([1, 1, 1])
+            # Total number of paragraphs
+            paragraph_blocks = [block for block in content_blocks if block['type'] == 'paragraph']
+            total_paragraphs = len(paragraph_blocks)
+
+            # Display navigation buttons and paragraph info
+            col1, col2, col3 = st.columns([1, 2, 1])
             with col1:
                 if st.button("Previous"):
                     if st.session_state.current_paragraph > 0:
                         st.session_state.current_paragraph -= 1
+            with col2:
+                st.write(f"Paragraph {st.session_state.current_paragraph + 1} of {total_paragraphs}")
             with col3:
                 if st.button("Next"):
-                    if st.session_state.current_paragraph + 1 < len(paragraphs):
+                    if st.session_state.current_paragraph + 1 < total_paragraphs:
                         st.session_state.current_paragraph += 1
 
-            # Display the paragraphs
-            display_paragraphs(st.session_state.current_paragraph, paragraphs)
+            # Display the content
+            display_paragraphs(st.session_state.current_paragraph, content_blocks)
         else:
             st.error("No readable content found in the EPUB file.")
             return
