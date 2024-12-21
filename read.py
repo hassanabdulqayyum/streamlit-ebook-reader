@@ -14,32 +14,37 @@ def get_content_elements(soup):
     """
     elements = []
     paragraph_positions = []
+
     def process_contents(parent):
         for content in parent.contents:
             if isinstance(content, str):
-                continue
-            if content.name == 'p':
-                p_class = content.get('class', [])
-                is_paragraph = 'para' in p_class or 'chapterOpenerText' in p_class or not p_class
-                if is_paragraph:
+                # Skip strings directly under the parent unless they have meaningful text
+                if content.strip():
+                    elements.append({'type': 'text', 'content': content.strip()})
+            else:
+                if content.name == 'p':
                     elements.append({'type': 'paragraph', 'content': content})
                     paragraph_positions.append(len(elements)-1)
+                    # Do not process contents of a paragraph further
+                    continue
+                elif content.name in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
+                    elements.append({'type': 'heading', 'content': content})
+                elif content.name == 'img':
+                    elements.append({'type': 'image', 'content': content})
+                elif content.name in ['figure', 'figcaption']:
+                    elements.append({'type': content.name, 'content': content})
                 else:
                     elements.append({'type': 'other', 'content': content})
-            elif content.name in ['h1','h2','h3','h4','h5','h6']:
-                elements.append({'type': 'heading', 'content': content})
-            elif content.name == 'img':
-                elements.append({'type': 'image', 'content': content})
-            elif content.name in ['figure', 'figcaption']:
-                elements.append({'type': content.name, 'content': content})
-            else:
-                elements.append({'type': 'other', 'content': content})
 
-            # Process the content's children recursively, for nested elements
-            if content.contents:
-                process_contents(content)
+                # Process the content's children recursively, for nested elements
+                if content.contents:
+                    process_contents(content)
     body = soup.find('body')
-    process_contents(body)
+    if body:
+        process_contents(body)
+    else:
+        # If no body tag, process the whole soup
+        process_contents(soup)
 
     return elements, paragraph_positions
 
@@ -47,7 +52,7 @@ def get_display_range(paragraph_positions, current_paragraph_index, elements_len
     # Determine the start and end element indices to display
     # For previous paragraph
     if current_paragraph_index > 0:
-        start_element_index = paragraph_positions[current_paragraph_index -1]
+        start_element_index = min(paragraph_positions[current_paragraph_index -1], elements_length - 1)
     else:
         start_element_index = 0
 
@@ -67,6 +72,10 @@ def split_sentences(paragraph_text):
     return sentences
 
 def display_paragraphs(current_paragraph_index, elements, paragraph_positions):
+    if not paragraph_positions:
+        st.error("No paragraphs found in this chapter.")
+        return
+
     # Get the display range
     start_index, end_index = get_display_range(paragraph_positions, current_paragraph_index, len(elements))
     display_elements = elements[start_index:end_index]
@@ -91,7 +100,8 @@ def display_paragraphs(current_paragraph_index, elements, paragraph_positions):
         """
         if elem['type'] == 'heading':
             font_style += "font-size: 24px; font-weight: bold;"
-            html_content += f"<div style='{font_style}'>{content_html}</div>"
+            heading_text = elem['content'].get_text().strip()
+            html_content += f"<div style='{font_style}'>{heading_text}</div>"
         elif elem['type'] == 'paragraph':
             # Check if this is the current paragraph
             if idx == current_element_idx:
@@ -118,9 +128,16 @@ def display_paragraphs(current_paragraph_index, elements, paragraph_positions):
                 paragraph_text = elem['content'].get_text()
                 paragraph_content = paragraph_text.strip()
                 html_content += f"<div style='{font_style}'>{paragraph_content}</div>"
+        elif elem['type'] == 'image':
+            # Handle images
+            img_src = elem['content'].get('src')
+            img_tag = f'<img src="{img_src}" alt="Image" style="max-width: 100%;">'
+            html_content += f"<div style='{font_style}'>{img_tag}</div>"
         else:
             # Other types
-            html_content += f"<div style='{font_style}'>{content_html}</div>"
+            other_text = elem['content'].get_text().strip() if hasattr(elem['content'], 'get_text') else content_html
+            if other_text:
+                html_content += f"<div style='{font_style}'>{other_text}</div>"
     # Display the HTML content using Streamlit
     st.write(html_content, unsafe_allow_html=True)
 
@@ -163,7 +180,7 @@ def main():
     </style>
     """, unsafe_allow_html=True)
 
-    st.title("Reader")
+    st.title("EPUB Reader")
 
     # Move file uploader to sidebar
     uploaded_file = st.sidebar.file_uploader("Choose an EPUB file", type="epub")
@@ -187,13 +204,15 @@ def main():
         # Initialize the chapter content
         chapters = []
         chapter_titles = []
+        image_items = {}
         for item in book.get_items():
             if item.get_type() == ebooklib.ITEM_DOCUMENT:
                 chapters.append(item)
-                # Attempt to get the chapter title
-                title = item.get_name()
-                # Alternatively, use item.get_name() or item.file_name
+                # Use item.file_name for chapter titles
+                title = item.get_name() or item.file_name
                 chapter_titles.append(title)
+            elif item.get_type() == ebooklib.ITEM_IMAGE:
+                image_items[item.get_name()] = item  # Collect images
 
         if chapters:
             # Move chapter selector to sidebar
@@ -202,7 +221,20 @@ def main():
             selected_item = chapters[chapter_index]
 
             # Parse the HTML content of the chapter
-            soup = BeautifulSoup(selected_item.get_body_content(), 'html.parser')
+            content = selected_item.get_content().decode('utf-8')
+            # Replace image src to display images
+            soup = BeautifulSoup(content, 'html.parser')
+            for img in soup.find_all('img'):
+                img_src = img.get('src')
+                # Get the image item from the images collected earlier
+                image_item = image_items.get(img_src)
+                if image_item:
+                    # Create a data URI for the image
+                    img_data = image_item.get_content()
+                    import base64
+                    data_uri = "data:image/jpeg;base64," + base64.b64encode(img_data).decode('utf-8')
+                    img['src'] = data_uri
+
             # Use the get_content_elements function to get content
             elements, paragraph_positions = get_content_elements(soup)
 
