@@ -284,7 +284,7 @@ def main():
     }
 
     /* Hide the Streamlit style elements (hamburger menu, header, footer) */
-    #MainMenu {visibility: hidden;}
+    
     header {visibility: hidden;}
     footer {visibility: hidden;}
 
