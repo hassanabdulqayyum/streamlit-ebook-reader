@@ -68,7 +68,7 @@ def display_paragraphs(paragraph_index, processed_paragraphs):
 
     for i, paragraph_html in enumerate(display_paragraphs):
         # Define base font style for readability
-        font_style = """
+            font_style = """
             font-family: Georgia, serif;
             font-weight: 450;
             font-size: 20px;
@@ -79,8 +79,8 @@ def display_paragraphs(paragraph_index, processed_paragraphs):
             bottom-margin: 20px;
             padding: 15px;
             border: 1px solid var(--primary-color);
-            /* Remove or set background-color to transparent */
-            background-color: transparent;
+            /* Remove or comment out this line */
+            /* background-color: transparent; */
             transition: text-shadow 0.5s;
         """
         highlighted_style = """
@@ -88,7 +88,6 @@ def display_paragraphs(paragraph_index, processed_paragraphs):
             padding: 2px 5px;
             border-radius: 5px;
             color: var(--text-color);
-            /* Ensure the highlighted text is above other elements */
             position: relative;
             z-index: 1;
         """
