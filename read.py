@@ -9,10 +9,10 @@ import os
 def get_theme_colors():
     theme_mode = st.get_option('theme.base')
     if theme_mode == 'dark':
-        # Define colors suitable for dark mode
-        colors = ["#ff8a65", "#ffb74d", "#4fc3f7", "#ba68c8", "#e57373"]
+        # Define darker colors suitable for dark mode
+        colors = ["#d32f2f", "#1976d2", "#388e3c", "#512da8", "#fbc02d"]
     else:
-        # Define colors suitable for light mode
+        # Define lighter pastel shades for light mode
         colors = ["#ffd54f", "#aed581", "#64b5f6", "#f06292", "#b39ddb"]
     return colors
 
@@ -22,18 +22,6 @@ colors = get_theme_colors()
 def get_color(index):
     # Cycle through the color list based on the sentence index
     return colors[index % len(colors)]
-
-def adjust_opacity(hex_color, opacity):
-    """
-    Converts a hex color code to rgba with the given opacity.
-    """
-    hex_color = hex_color.lstrip('#')
-    # Expand shorthand hex code (e.g., 'abc' -> 'aabbcc')
-    if len(hex_color) == 3:
-        hex_color = ''.join([c*2 for c in hex_color])
-    lv = len(hex_color)
-    rgb = tuple(int(hex_color[i:i+2], 16) for i in range(0, lv, 2))
-    return f'rgba({rgb[0]}, {rgb[1]}, {rgb[2]}, {opacity})'
 
 def get_processed_paragraphs(soup):
     """
@@ -70,7 +58,7 @@ def get_processed_paragraphs(soup):
     
     return processed_paragraphs
 
-def display_paragraphs(paragraph_index, processed_paragraphs, theme_mode):
+def display_paragraphs(paragraph_index, processed_paragraphs):
     """
     Displays three paragraphs at a time, highlighting the middle one.
     Other elements like captions and images are displayed as part of the paragraph.
@@ -96,8 +84,8 @@ def display_paragraphs(paragraph_index, processed_paragraphs, theme_mode):
                background-color: var(--background-color);
                transition: text-shadow 0.5s;
         """
-        highlighted_style_template = """
-                background-color: {adjusted_color};
+        highlighted_style = """
+                background-color: {color};
                 padding: 2px 5px;
                 border-radius: 5px;
                 color: var(--text-color);  /* Ensure text color matches theme's text color */
@@ -119,19 +107,10 @@ def display_paragraphs(paragraph_index, processed_paragraphs, theme_mode):
         
         if is_highlighted:
             sentences = paragraph_text.strip().split('. ')
-            highlighted_sentences = []
-            for j, sentence in enumerate(sentences):
-                # Set opacity based on theme mode
-                if theme_mode == 'dark':
-                    opacity = 0.3  # Lower opacity in dark mode for subtle highlight
-                else:
-                    opacity = 0.7  # Higher opacity in light mode
-                color = get_color(j)
-                adjusted_color = adjust_opacity(color, opacity)
-                highlighted_style = highlighted_style_template.format(adjusted_color=adjusted_color)
-                highlighted_sentence = f'<span style="{highlighted_style}">{sentence.strip()}{"." if not sentence.strip().endswith(".") else ""}</span>'
-                highlighted_sentences.append(highlighted_sentence)
-            paragraph_content = ' '.join(highlighted_sentences)
+            highlighted_sentence = [
+                f'<span style="{highlighted_style.format(color=get_color(j))}">{sentence.strip()}{"." if not sentence.strip().endswith(".") else ""}</span>'
+                for j, sentence in enumerate(sentences)]
+            paragraph_content = ' '.join(highlighted_sentence)
             html_content += f"<div style='{font_style}'>{paragraph_content}</div>"
         else:
             # Include any images or captions in the paragraph_html
@@ -199,11 +178,8 @@ def main():
                     if st.session_state.current_paragraph + 1 < len(chapter_paragraphs):
                         st.session_state.current_paragraph += 1
 
-            # Get the current theme mode
-            theme_mode = st.get_option('theme.base')
-
-            # Display the paragraphs with adjusted styling
-            display_paragraphs(st.session_state.current_paragraph, chapter_paragraphs, theme_mode)
+            # Display the paragraphs
+            display_paragraphs(st.session_state.current_paragraph, chapter_paragraphs)
         else:
             st.error("No readable content found in the EPUB file.")
             return
