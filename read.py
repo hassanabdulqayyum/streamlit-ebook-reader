@@ -2,91 +2,175 @@ import streamlit as st
 import ebooklib
 from ebooklib import epub
 from bs4 import BeautifulSoup
-from markdownify import markdownify as md
 import tempfile
 import os
-import re
+from markdownify import markdownify as md
 
-def extract_chapter_content(item):
+def get_markdown_content(soup):
     """
-    Extracts and converts the HTML content of a chapter to Markdown.
+    Converts the HTML content to Markdown and splits it into content units.
     """
-    html_content = item.get_body_content().decode("utf-8")
-    # Convert HTML to Markdown
-    markdown_content = md(html_content, heading_style="ATX")
-    return markdown_content
+    # Convert the entire HTML to Markdown
+    full_markdown = md(str(soup), heading_style="ATX")
+    
+    # Split the Markdown content into lines
+    content_lines = full_markdown.split('\n')
 
-def split_into_blocks(markdown_content):
-    """
-    Splits the Markdown content into blocks (paragraphs, headings, lists, etc.).
-    We'll use two newlines as a separator.
-    """
-    blocks = re.split(r'\n\s*\n', markdown_content.strip())
-    return blocks
+    content_units = []
+    current_paragraph = ""
 
-def get_display_blocks(paragraph_index, blocks):
+    for line in content_lines:
+        stripped_line = line.strip()
+        if not stripped_line:
+            # Empty line indicates a paragraph break
+            if current_paragraph:
+                content_units.append({'type': 'paragraph', 'content': current_paragraph.strip()})
+                current_paragraph = ""
+            continue
+        elif stripped_line.startswith('#'):
+            # This is a heading
+            if current_paragraph:
+                content_units.append({'type': 'paragraph', 'content': current_paragraph.strip()})
+                current_paragraph = ""
+            content_units.append({'type': 'heading', 'content': stripped_line})
+        elif stripped_line.startswith(('-', '*', '+')) or stripped_line[0].isdigit():
+            # This is a list item
+            if current_paragraph:
+                content_units.append({'type': 'paragraph', 'content': current_paragraph.strip()})
+                current_paragraph = ""
+            content_units.append({'type': 'list_item', 'content': stripped_line})
+        else:
+            # Accumulate lines into the current paragraph
+            current_paragraph += ' ' + stripped_line
+
+    # Add any remaining paragraph
+    if current_paragraph:
+        content_units.append({'type': 'paragraph', 'content': current_paragraph.strip()})
+
+    # Combine consecutive list items into lists
+    updated_content_units = []
+    i = 0
+    while i < len(content_units):
+        if content_units[i]['type'] == 'list_item':
+            # Start collecting list items
+            list_items = []
+            while i < len(content_units) and content_units[i]['type'] == 'list_item':
+                list_items.append(content_units[i]['content'])
+                i += 1
+            # Combine into a list
+            list_content = '\n'.join(list_items)
+            updated_content_units.append({'type': 'list', 'content': list_content})
+        else:
+            updated_content_units.append(content_units[i])
+            i += 1
+
+    return updated_content_units
+
+def get_display_content(paragraph_index, content_units):
     """
-    Given the current paragraph index, return the blocks to display.
-    Ensures three paragraphs (or blocks) are displayed, with the middle one highlighted.
+    Given the current paragraph index, return the content units to display.
+    Includes the headings associated with each paragraph, and ensures three paragraphs are displayed.
     """
-    num_blocks = len(blocks)
+    # Build a list of indices of paragraphs
+    paragraph_indices = [i for i, cu in enumerate(content_units) if cu['type'] == 'paragraph']
+    
+    num_paragraphs = len(paragraph_indices)
+
+    # Handle the case where no paragraphs are found
+    if num_paragraphs == 0:
+        return [], paragraph_index
 
     # Ensure paragraph_index is within bounds
     if paragraph_index < 0:
         paragraph_index = 0
-    elif paragraph_index >= num_blocks:
-        paragraph_index = num_blocks - 1
+    elif paragraph_index >= num_paragraphs:
+        paragraph_index = num_paragraphs - 1
 
-    # Get indices for the three blocks
+    # Get indices for the three paragraphs
     indices_to_show = []
     for offset in [-1, 0, 1]:
-        idx = paragraph_index + offset
-        if 0 <= idx < num_blocks:
-            indices_to_show.append(idx)
+        para_idx = paragraph_index + offset
+        if 0 <= para_idx < num_paragraphs:
+            indices_to_show.append(para_idx)
 
-    display_blocks = [blocks[i] for i in indices_to_show]
-    return display_blocks, paragraph_index
+    display_units = []
+    for para_idx in indices_to_show:
+        paragraph_pos = paragraph_indices[para_idx]
 
-def display_blocks(display_blocks, paragraph_index, blocks):
+        # Collect any headings immediately preceding the paragraph
+        idx = paragraph_pos - 1
+        headings = []
+        while idx >= 0 and content_units[idx]['type'] in ['heading', 'image', 'caption']:
+            if content_units[idx]['type'] == 'heading':
+                headings.insert(0, content_units[idx])  # Insert at the beginning
+            idx -= 1
+
+        # Add headings to display units
+        display_units.extend(headings)
+
+        # Add the paragraph
+        display_units.append(content_units[paragraph_pos])
+
+        # Collect any content units immediately after the paragraph (e.g., lists)
+        idx = paragraph_pos + 1
+        while idx < len(content_units) and content_units[idx]['type'] in ['caption', 'image', 'list']:
+            display_units.append(content_units[idx])
+            idx += 1
+
+    return display_units, paragraph_index
+
+def display_paragraphs(display_units, paragraph_index, content_units):
     """
-    Displays the content blocks, highlighting the current paragraph.
+    Displays the content units, highlighting the current paragraph.
     """
-    current_block_index = blocks.index(display_blocks[1])  # Middle block
+    # Build a list of indices of paragraphs
+    paragraph_indices = [i for i, cu in enumerate(content_units) if cu['type'] == 'paragraph']
 
-    st.markdown(f"<div style='font-family: Georgia, serif; font-size: 20px; line-height: 1.6;'>", unsafe_allow_html=True)
+    # Handle the case where no paragraphs are found
+    if not paragraph_indices:
+        st.warning("No paragraphs found in this chapter.")
+        return
 
-    for i, block in enumerate(display_blocks):
-        block_index = current_block_index + i - 1  # Adjust index based on position
-        # Check if the block is the current one to highlight
-        if block_index == paragraph_index:
-            # Highlight the block
-            highlighted_block = highlight_block(block)
-            st.markdown(highlighted_block, unsafe_allow_html=True)
+    curr_para_pos = paragraph_indices[paragraph_index]
+
+    # Prepare the Markdown content
+    markdown_content = ""
+
+    for cu in display_units:
+        content_type = cu['type']
+        content_md = cu['content']
+        if content_type == 'heading':
+            # Headings are already formatted in Markdown
+            markdown_content += f"{content_md}\n\n"
+        elif content_type == 'paragraph':
+            # Determine if this is the current paragraph to highlight
+            if cu == content_units[curr_para_pos]:
+                # Highlight the paragraph
+                # Split into sentences
+                sentences = content_md.strip().split('. ')
+                highlighted_sentences = []
+                for j, sentence in enumerate(sentences):
+                    color_variable = f"var(--color-{j%5 +1})"
+                    highlighted_style = f"background-color: {color_variable}; padding: 2px 5px; border-radius: 5px; color: var(--text-color);"
+                    if sentence.strip():
+                        # Ensure proper punctuation at the end
+                        if not sentence.endswith('.'):
+                            sentence += '.'
+                        sentence_html = f'<span style="{highlighted_style}">{sentence.strip()}</span>'
+                        highlighted_sentences.append(sentence_html)
+                paragraph_content = ' '.join(highlighted_sentences)
+                markdown_content += f"{paragraph_content}\n\n"
+            else:
+                # Regular paragraph
+                markdown_content += f"{content_md}\n\n"
+        elif content_type == 'list':
+            markdown_content += f"{content_md}\n\n"
         else:
-            # Render normally
-            st.markdown(block)
+            # Other content types
+            markdown_content += f"{content_md}\n\n"
 
-    st.markdown("</div>", unsafe_allow_html=True)
-
-def highlight_block(block):
-    """
-    Adds HTML styles to highlight the block.
-    """
-    # Split block into sentences
-    sentences = re.split(r'(?<=[.!?])\s+', block.strip())
-    highlighted_sentences = []
-    for j, sentence in enumerate(sentences):
-        color_variable = f"var(--color-{j%5 +1})"
-        highlighted_style = f"""
-            background-color: {color_variable};
-            padding: 2px 5px;
-            border-radius: 5px;
-            color: var(--text-color);
-        """
-        sentence_html = f'<span style="{highlighted_style}">{sentence.strip()}</span>'
-        highlighted_sentences.append(sentence_html)
-    highlighted_block = ' '.join(highlighted_sentences)
-    return highlighted_block
+    # Display the content using Streamlit
+    st.markdown(markdown_content, unsafe_allow_html=True)
 
 def main():
     # Inject CSS styles
@@ -116,11 +200,24 @@ def main():
         }
     }
 
+    /* Style for the highlighted text */
+    p {
+        font-family: Georgia, serif;
+        font-size: 20px;
+        line-height: 1.6;
+    }
+
     /* Hide the Streamlit style elements (hamburger menu, header, footer) */
     #MainMenu {visibility: hidden;}
     header {visibility: hidden;}
     footer {visibility: hidden;}
 
+    /* Responsive font sizes for mobile devices */
+    @media only screen and (max-width: 600px) {
+        p {
+            font-size: 5vw !important;
+        }
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -153,6 +250,7 @@ def main():
                 chapters.append(item)
                 # Attempt to get the chapter title
                 title = item.get_name()
+                # Alternatively, use item.get_title() if available
                 chapter_titles.append(title)
 
         if chapters:
@@ -161,10 +259,14 @@ def main():
             chapter_index = chapter_titles.index(selected_chapter)
             selected_item = chapters[chapter_index]
 
-            # Extract and convert chapter content to Markdown
-            markdown_content = extract_chapter_content(selected_item)
-            # Split content into blocks
-            blocks = split_into_blocks(markdown_content)
+            # Parse the HTML content of the chapter
+            soup = BeautifulSoup(selected_item.get_content(), 'html.parser')
+
+            # Use the get_markdown_content function to get content units
+            content_units = get_markdown_content(soup)
+
+            # Build a list of indices of paragraphs
+            paragraph_indices = [i for i, cu in enumerate(content_units) if cu['type'] == 'paragraph']
 
             # Initialize session state for the paragraph index
             if 'current_paragraph' not in st.session_state or st.session_state.chapter != selected_chapter:
@@ -179,14 +281,14 @@ def main():
                         st.session_state.current_paragraph -= 1
             with col3:
                 if st.button("Next"):
-                    if st.session_state.current_paragraph + 1 < len(blocks):
+                    if st.session_state.current_paragraph + 1 < len(paragraph_indices):
                         st.session_state.current_paragraph += 1
 
-            # Get the display blocks
-            display_blocks, para_idx = get_display_blocks(st.session_state.current_paragraph, blocks)
+            # Get the display content units
+            display_units, para_idx = get_display_content(st.session_state.current_paragraph, content_units)
 
-            # Display the blocks
-            display_blocks(display_blocks, st.session_state.current_paragraph, blocks)
+            # Display the content units
+            display_paragraphs(display_units, st.session_state.current_paragraph, content_units)
         else:
             st.error("No readable content found in the EPUB file.")
             return
