@@ -5,21 +5,19 @@ from bs4 import BeautifulSoup
 import tempfile
 import os
 
-
 def get_theme_colors():
     theme_mode = st.get_option('theme.base')
     if theme_mode == 'dark':
         # Define darker colors suitable for dark mode
-        colors = ["#d32f2f", "#1976d2", "#388e3c", "#512da8", "#827717"]
+        colors = ["#d32f2f", "#1976d2", "#388e3c", "#512da8", "#827717"]  # Updated yellow
     else:
         # Define lighter pastel shades for light mode
         colors = ["#ffd54f", "#aed581", "#64b5f6", "#f06292", "#b39ddb"]
     return colors
 
-# Colors for highlighting sentences
-colors = get_theme_colors()
-
 def get_color(index):
+    # Get the colors based on the current theme
+    colors = get_theme_colors()
     # Cycle through the color list based on the sentence index
     return colors[index % len(colors)]
 
@@ -106,6 +104,7 @@ def display_paragraphs(paragraph_index, processed_paragraphs):
         is_highlighted = (paragraph_index == 0 and i == 0) or (paragraph_index != 0 and i == 1)
         
         if is_highlighted:
+            # Get the colors based on the current theme
             sentences = paragraph_text.strip().split('. ')
             highlighted_sentence = [
                 f'<span style="{highlighted_style.format(color=get_color(j))}">{sentence.strip()}{"." if not sentence.strip().endswith(".") else ""}</span>'
