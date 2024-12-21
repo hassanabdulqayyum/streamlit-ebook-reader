@@ -57,11 +57,10 @@ def get_processed_paragraphs(soup):
     return processed_paragraphs
 
 def display_paragraphs(paragraph_index, processed_paragraphs):
-    # Get theme colors
-    text_color = st.get_option('theme.textColor') or '#000000'
-    background_color = st.get_option('theme.backgroundColor') or '#FFFFFF'
-    primary_color = st.get_option('theme.primaryColor') or '#FFFFFF'
-    
+    """
+    Displays three paragraphs at a time, highlighting the middle one.
+    Other elements like captions and images are displayed as part of the paragraph.
+    """
     # Extract the three paragraphs to be displayed
     display_paragraphs = processed_paragraphs[max(paragraph_index-1, 0):paragraph_index+2]
 
@@ -69,24 +68,25 @@ def display_paragraphs(paragraph_index, processed_paragraphs):
 
     for i, paragraph_html in enumerate(display_paragraphs):
         # Define base font style for readability
-        font_style = f"""
+        font_style = """
                font-family: Georgia, serif;
                font-weight: 450;
                font-size: 20px;
-               color: {text_color};
+               color: var(--text-color);
                line-height: 1.6;
                max-width: 1000px;
                margin: 10px auto;
+               bottom-margin: 20px;
                padding: 15px;
-               border: 1px solid {primary_color};
-               background-color: {background_color};
+               border: 1px solid var(--primary-color);
+               background-color: var(--background-color);
                transition: text-shadow 0.5s;
         """
-        highlighted_style_template = """
+        highlighted_style = """
                 background-color: {color};
                 padding: 2px 5px;
                 border-radius: 5px;
-                color: {text_color};
+                color: var(--text-color);  /* Ensure text color matches theme's text color */
         """
 
         # Parse the paragraph_html to get the text
@@ -106,7 +106,7 @@ def display_paragraphs(paragraph_index, processed_paragraphs):
         if is_highlighted:
             sentences = paragraph_text.strip().split('. ')
             highlighted_sentence = [
-                f'<span style="{highlighted_style_template.format(color=get_color(j), text_color=text_color)}">{sentence.strip()}{"." if not sentence.strip().endswith(".") else ""}</span>'
+                f'<span style="{highlighted_style.format(color=get_color(j))}">{sentence.strip()}{"." if not sentence.strip().endswith(".") else ""}</span>'
                 for j, sentence in enumerate(sentences)]
             paragraph_content = ' '.join(highlighted_sentence)
             html_content += f"<div style='{font_style}'>{paragraph_content}</div>"
