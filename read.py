@@ -5,22 +5,6 @@ from bs4 import BeautifulSoup
 import tempfile
 import os
 
-def get_theme_colors():
-    theme_mode = st.get_option('theme.base')
-    if theme_mode == 'dark':
-        # Now, changing the opacity here will reflect in the app #512da8
-        colors = ["#d32f2f", "#1976d2", "#388e3c", "#388e3c", "rgba(251, 192, 45, 0.5)"]  # Semi-transparent yellow
-    else:
-        # Define lighter pastel shades for light mode
-        colors = ["#ffd54f", "#aed581", "#64b5f6", "#f06292", "#b39ddb"]
-    return colors
-
-def get_color(index):
-    # Get the colors based on the current theme
-    colors = get_theme_colors()
-    # Cycle through the color list based on the sentence index
-    return colors[index % len(colors)]
-
 def get_processed_paragraphs(soup):
     """
     Processes the HTML soup to generate a list of paragraph contents.
@@ -69,22 +53,20 @@ def display_paragraphs(paragraph_index, processed_paragraphs):
     for i, paragraph_html in enumerate(display_paragraphs):
         # Define base font style for readability
         font_style = """
-        font-family: Georgia, serif;
-        font-weight: 450;
-        font-size: 20px;
-        color: var(--text-color);
-        line-height: 1.6;
-        max-width: 1000px;
-        margin: 10px auto;
-        bottom-margin: 20px;
-        padding: 15px;
-        border: 1px solid var(--primary-color);
-        /* Remove or comment out this line */
-        /* background-color: transparent; */
-        transition: text-shadow 0.5s;
-    """
+            font-family: Georgia, serif;
+            font-weight: 450;
+            font-size: 20px;
+            color: var(--text-color);
+            line-height: 1.6;
+            max-width: 1000px;
+            margin: 10px auto;
+            bottom-margin: 20px;
+            padding: 15px;
+            border: 1px solid var(--primary-color);
+            transition: text-shadow 0.5s;
+        """
         highlighted_style = """
-            background-color: {color};
+            background-color: var(--highlight-color-{index});
             padding: 2px 5px;
             border-radius: 5px;
             color: var(--text-color);
@@ -109,7 +91,7 @@ def display_paragraphs(paragraph_index, processed_paragraphs):
         if is_highlighted:
             sentences = paragraph_text.strip().split('. ')
             highlighted_sentence = [
-                f'<span style="{highlighted_style.format(color=get_color(j))}">{sentence.strip()}{"." if not sentence.strip().endswith(".") else ""}</span>'
+                f'<span style="{highlighted_style.format(index=j % 5)}">{sentence.strip()}{"." if not sentence.strip().endswith(".") else ""}</span>'
                 for j, sentence in enumerate(sentences)]
             paragraph_content = ' '.join(highlighted_sentence)
             html_content += f"<div style='{font_style}'>{paragraph_content}</div>"
@@ -120,16 +102,44 @@ def display_paragraphs(paragraph_index, processed_paragraphs):
     # Display the HTML content using Streamlit
     st.write(html_content, unsafe_allow_html=True)
 
+def inject_custom_css():
+    css = """
+    <style>
+    :root {
+        /* Light mode colors */
+        --highlight-color-0: #ffd54f;
+        --highlight-color-1: #aed581;
+        --highlight-color-2: #64b5f6;
+        --highlight-color-3: #f06292;
+        --highlight-color-4: #b39ddb;
+    }
+
+    @media (prefers-color-scheme: dark) {
+        :root {
+            /* Dark mode colors with adjusted opacity */
+            --highlight-color-0: rgba(251, 192, 45, 0.9); /* Semi-transparent yellow */
+            --highlight-color-1: #d32f2f;
+            --highlight-color-2: #1976d2;
+            --highlight-color-3: #388e3c;
+            --highlight-color-4: #512da8;
+        }
+    }
+    </style>
+    """
+    st.markdown(css, unsafe_allow_html=True)
+
 def main():
+    # Inject the custom CSS into the app
+    inject_custom_css()
 
     # Hide the Streamlit style elements (hamburger menu, header, footer)
     hide_streamlit_style = """
-                <style>
-                #MainMenu {visibility: hidden;}
-                header {visibility: hidden;}
-                footer {visibility: hidden;}
-                </style>
-                """
+        <style>
+        #MainMenu {visibility: hidden;}
+        header {visibility: hidden;}
+        footer {visibility: hidden;}
+        </style>
+        """
     st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
     # Responsive font sizes for mobile devices
