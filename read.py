@@ -9,6 +9,7 @@ from nltk.tokenize import sent_tokenize
 
 # Download NLTK data files
 nltk.download('punkt')
+nltk.download('punkt-tab')
 
 def get_chapter_elements(soup):
     """
