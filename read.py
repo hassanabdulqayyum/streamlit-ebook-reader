@@ -187,15 +187,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-```
-
-### Explanation:
-
-- **Moved `get_theme_colors()` Call:** The `get_theme_colors()` function is now called inside the `get_color()` function, ensuring it retrieves the current theme colors each time a color is needed.
-  
-  ```python
-  def get_color(index):
-      # Get the colors based on the current theme
-      colors = get_theme_colors()
-      # Cycle through the color list based on the sentence index
-      return colors[index % len(colors)]
