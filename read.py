@@ -2,7 +2,8 @@ import streamlit as st
 import ebooklib
 from ebooklib import epub
 from markdownify import markdownify as md
-
+import bs4
+from bs4 import BeautifulSoup
 import tempfile
 import os
 import markdown
