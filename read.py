@@ -7,26 +7,25 @@ import os
 
 def get_theme_colors():
     theme_mode = st.get_option('theme.base')
-    # Use the same light colors for both themes
-    colors = ["#ffd54f", "#aed581", "#64b5f6", "#f06292", "#b39ddb"]
+    if theme_mode == 'dark':
+        # Define darker colors suitable for dark mode
+        colors = ["#d32f2f", "#1976d2", "#388e3c", "#512da8", "#827717"]  # Updated yellow
+    else:
+        # Define lighter pastel shades for light mode
+        colors = ["#ffd54f", "#aed581", "#64b5f6", "#f06292", "#b39ddb"]
     return colors
 
-def hex_to_rgba(hex_color, opacity=1):
-    hex_color = hex_color.lstrip('#')
-    lv = len(hex_color)
-    rgb = tuple(int(hex_color[i:i + lv // 3], 16) for i in range(0, lv, lv // 3))
-    return f'rgba({rgb[0]}, {rgb[1]}, {rgb[2]}, {opacity})'
-
 def get_color(index):
+    # Get the colors based on the current theme
     colors = get_theme_colors()
-    hex_color = colors[index % len(colors)]
-    theme_mode = st.get_option('theme.base')
-    opacity = 0.2 if theme_mode == 'dark' else 1  # Set lower opacity in dark mode
-    rgba_color = hex_to_rgba(hex_color, opacity)
-    return rgba_color
+    # Cycle through the color list based on the sentence index
+    return colors[index % len(colors)]
 
 def get_processed_paragraphs(soup):
-    # Existing function code remains the same
+    """
+    Processes the HTML soup to generate a list of paragraph contents.
+    Non-paragraph elements like captions and images are appended to the next paragraph.
+    """
     processed_paragraphs = []
     temp_content = ''
     p_tags = soup.find_all('p')
@@ -47,8 +46,9 @@ def get_processed_paragraphs(soup):
             # Collect the content in temp_content to be added to the next paragraph
             temp_content += str(p) + '\n'
     
-    # Handle any remaining temp_content
+    # Handle any remaining temp_content (if last elements are not paragraphs)
     if temp_content:
+        # Append to the last paragraph if exists, else add as a new paragraph
         if processed_paragraphs:
             processed_paragraphs[-1] += '\n' + temp_content
         else:
@@ -57,6 +57,10 @@ def get_processed_paragraphs(soup):
     return processed_paragraphs
 
 def display_paragraphs(paragraph_index, processed_paragraphs):
+    """
+    Displays three paragraphs at a time, highlighting the middle one.
+    Other elements like captions and images are displayed as part of the paragraph.
+    """
     # Extract the three paragraphs to be displayed
     display_paragraphs = processed_paragraphs[max(paragraph_index-1, 0):paragraph_index+2]
     
@@ -79,10 +83,10 @@ def display_paragraphs(paragraph_index, processed_paragraphs):
                transition: text-shadow 0.5s;
         """
         highlighted_style = """
-            background-color: {color};
-            padding: 0 2px;
-            border-radius: 3px;
-            color: var(--text-color);
+                background-color: {color};
+                padding: 2px 5px;
+                border-radius: 5px;
+                color: var(--text-color);  /* Ensure text color matches theme's text color */
         """
         
         # Parse the paragraph_html to get the text
@@ -100,6 +104,7 @@ def display_paragraphs(paragraph_index, processed_paragraphs):
         is_highlighted = (paragraph_index == 0 and i == 0) or (paragraph_index != 0 and i == 1)
         
         if is_highlighted:
+            # Get the colors based on the current theme
             sentences = paragraph_text.strip().split('. ')
             highlighted_sentence = [
                 f'<span style="{highlighted_style.format(color=get_color(j))}">{sentence.strip()}{"." if not sentence.strip().endswith(".") else ""}</span>'
@@ -182,3 +187,15 @@ def main():
 
 if __name__ == "__main__":
     main()
+```
+
+### Explanation:
+
+- **Moved `get_theme_colors()` Call:** The `get_theme_colors()` function is now called inside the `get_color()` function, ensuring it retrieves the current theme colors each time a color is needed.
+  
+  ```python
+  def get_color(index):
+      # Get the colors based on the current theme
+      colors = get_theme_colors()
+      # Cycle through the color list based on the sentence index
+      return colors[index % len(colors)]
