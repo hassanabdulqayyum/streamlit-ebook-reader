@@ -8,8 +8,8 @@ import os
 def get_theme_colors():
     theme_mode = st.get_option('theme.base')
     if theme_mode == 'dark':
-        # Define colors suitable for dark mode with adjusted yellow opacity
-        colors = ["#d32f2f", "#1976d2", "#388e3c", "#512da8", "rgba(251, 192, 45, 0.9)"]  # Semi-transparent yellow
+        # Define colors suitable for dark mode with adjusted yellow opacity using 8-digit hex codes
+        colors = ["#d32f2f", "#1976d2", "#388e3c", "#512da8", "#fbc02d4D"]  # Semi-transparent yellow
     else:
         # Define lighter pastel shades for light mode
         colors = ["#ffd54f", "#aed581", "#64b5f6", "#f06292", "#b39ddb"]
@@ -68,19 +68,19 @@ def display_paragraphs(paragraph_index, processed_paragraphs):
 
     for i, paragraph_html in enumerate(display_paragraphs):
         # Define base font style for readability
+        # Define base font style for readability
         font_style = (
-           "font-family: Georgia, serif; "
-           "font-weight: 450; "
-           "font-size: 20px; "
-           "color: var(--text-color); "
-           "line-height: 1.6; "
-           "max-width: 1000px; "
-           "margin: 10px auto; "
-           "bottom-margin: 20px; "
-           "padding: 15px; "
-           "border: 1px solid var(--primary-color); "
-           "background-color: var(--background-color); "
-           "transition: text-shadow 0.5s;"
+            "font-family: Georgia, serif; "
+            "font-weight: 450; "
+            "font-size: 20px; "
+            "color: var(--text-color); "
+            "line-height: 1.6; "
+            "max-width: 1000px; "
+            "margin: 10px auto; "
+            "padding: 15px; "
+            "border: 1px solid var(--primary-color); "
+            "background-color: var(--background-color); "
+            "transition: text-shadow 0.5s;"
         )
         highlighted_style = (
             "background-color: {color}; "
