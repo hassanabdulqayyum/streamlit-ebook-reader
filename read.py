@@ -2,7 +2,7 @@ import streamlit as st
 import ebooklib
 from ebooklib import epub
 from bs4 import BeautifulSoup, Tag
-from markdownify import markdownify as md
+import html2text
 import tempfile
 import os
 
@@ -47,8 +47,9 @@ def get_content_units(soup):
                 # For other tags, treat them based on their content
                 content_type = 'other'
 
-            # Convert the HTML element to Markdown
-            content_markdown = md(str(element), strip=["a"])
+            # Convert the HTML element to Markdown using html2text
+            html_content = str(element)
+            content_markdown = html2text.html2text(html_content)
 
             # Append the content unit
             content_units.append({'type': content_type, 'content': content_markdown})
@@ -152,7 +153,7 @@ def display_paragraphs(display_units, paragraph_index, content_units):
                 sentences = content.strip().split('. ')
                 highlighted_sentences = []
                 for j, sentence in enumerate(sentences):
-                    color_variable = f"var(--color-{j%5 +1})"
+                    color_variable = f"var(--color-{(j%5)+1})"
                     highlighted_style = f"background-color: {color_variable}; border-radius:5px; padding:2px;"
                     if not sentence.endswith('.'):
                         sentence += '.'
