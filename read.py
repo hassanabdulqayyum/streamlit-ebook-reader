@@ -8,8 +8,8 @@ import os
 def get_theme_colors():
     theme_mode = st.get_option('theme.base')
     if theme_mode == 'dark':
-        # Define darker colors suitable for dark mode
-        colors = ["#d32f2f", "#1976d2", "#388e3c", "#512da8", "#827717"]  # Updated yellow
+        # Define colors suitable for dark mode with adjusted yellow opacity
+        colors = ["#d32f2f", "#1976d2", "#388e3c", "#512da8", "rgba(251, 192, 45, 0.5)"]  # Semi-transparent yellow
     else:
         # Define lighter pastel shades for light mode
         colors = ["#ffd54f", "#aed581", "#64b5f6", "#f06292", "#b39ddb"]
@@ -29,7 +29,7 @@ def get_processed_paragraphs(soup):
     processed_paragraphs = []
     temp_content = ''
     p_tags = soup.find_all('p')
-    
+
     for p in p_tags:
         p_class = p.get('class', [])
         is_paragraph = 'para' in p_class or 'chapterOpenerText' in p_class
@@ -45,7 +45,7 @@ def get_processed_paragraphs(soup):
         else:
             # Collect the content in temp_content to be added to the next paragraph
             temp_content += str(p) + '\n'
-    
+
     # Handle any remaining temp_content (if last elements are not paragraphs)
     if temp_content:
         # Append to the last paragraph if exists, else add as a new paragraph
@@ -53,7 +53,7 @@ def get_processed_paragraphs(soup):
             processed_paragraphs[-1] += '\n' + temp_content
         else:
             processed_paragraphs.append(temp_content)
-    
+
     return processed_paragraphs
 
 def display_paragraphs(paragraph_index, processed_paragraphs):
@@ -63,9 +63,9 @@ def display_paragraphs(paragraph_index, processed_paragraphs):
     """
     # Extract the three paragraphs to be displayed
     display_paragraphs = processed_paragraphs[max(paragraph_index-1, 0):paragraph_index+2]
-    
+
     html_content = ""
-    
+
     for i, paragraph_html in enumerate(display_paragraphs):
         # Define base font style for readability
         font_style = """
@@ -88,10 +88,10 @@ def display_paragraphs(paragraph_index, processed_paragraphs):
                 border-radius: 5px;
                 color: var(--text-color);  /* Ensure text color matches theme's text color */
         """
-        
+
         # Parse the paragraph_html to get the text
         soup = BeautifulSoup(paragraph_html, 'html.parser')
-        
+
         # Get the combined text of the paragraph and any associated elements
         paragraph_text = ''
         for content in soup.contents:
@@ -99,12 +99,11 @@ def display_paragraphs(paragraph_index, processed_paragraphs):
                 paragraph_text += content.get_text(separator=' ') + ' '
             else:
                 paragraph_text += str(content) + ' '  # Include images or other tags
-        
+
         # Highlight the middle paragraph (or first if at the beginning)
         is_highlighted = (paragraph_index == 0 and i == 0) or (paragraph_index != 0 and i == 1)
-        
+
         if is_highlighted:
-            # Get the colors based on the current theme
             sentences = paragraph_text.strip().split('. ')
             highlighted_sentence = [
                 f'<span style="{highlighted_style.format(color=get_color(j))}">{sentence.strip()}{"." if not sentence.strip().endswith(".") else ""}</span>'
@@ -114,7 +113,7 @@ def display_paragraphs(paragraph_index, processed_paragraphs):
         else:
             # Include any images or captions in the paragraph_html
             html_content += f"<div style='{font_style}'>{paragraph_text}</div>"
-    
+
     # Display the HTML content using Streamlit
     st.write(html_content, unsafe_allow_html=True)
 
