@@ -6,6 +6,8 @@ import tempfile
 import os
 import nltk
 nltk.download('punkt')
+nltk.download('punkt_tab')
+
 from nltk.tokenize import sent_tokenize
 
 def get_content_units(soup):
