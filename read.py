@@ -1,11 +1,10 @@
 import streamlit as st
-import ebooklib  # Import the ebooklib module
+import ebooklib
 from ebooklib import epub
 from bs4 import BeautifulSoup, NavigableString, Tag
 import tempfile
 import os
 import re
-
 
 def get_toc_map(book):
     """
@@ -23,7 +22,7 @@ def get_toc_map(book):
                 # Entry can be a tuple: (epub.Section, list of subentries)
                 section = entry[0]
                 subentries = entry[1]
-                
+
                 if isinstance(section, epub.Section):
                     href = section.href.split("#")[0] if section.href else ''
                     title = section.title
@@ -40,7 +39,6 @@ def get_toc_map(book):
 
     parse_toc_entries(book.toc)
     return toc_map
-
 
 def get_processed_elements(soup):
     """
@@ -92,15 +90,22 @@ def get_processed_elements(soup):
     return elements
 
 def split_sentences(text):
-    # Regex to split sentences, handling abbreviations and references
-    sentence_endings = re.compile(r'''
-        (?<!\b\w\.\w\.)           # Negative lookbehind for strings like "e.g."
-        (?<!\b[A-Z][a-z]\.)       # Negative lookbehind for abbreviations like "Dr."
-        (?<!\s[A-Z])              # Negative lookbehind for single capital letters
-        (?<=\.|\?|!|\.\")         # Positive lookbehind for punctuation or punctuation followed by quote
-        \s+                       # Split on whitespace
-        ''', re.VERBOSE)
-    sentences = sentence_endings.split(text.strip())
+    # Define a list of abbreviations that should not be considered as sentence endings
+    abbreviations = [
+        'Mr.', 'Mrs.', 'Dr.', 'Prof.', 'e.g.', 'i.e.', 'vs.', 'et al.', 'Fig.', 'fig.', 'etc.'
+    ]
+
+    # Escape periods in abbreviations for regex
+    abbreviations_regex = '|'.join([re.escape(abbrev) for abbrev in abbreviations])
+
+    # Regex pattern to split sentences, taking care of abbreviations
+    pattern = re.compile(
+        r'(?<!\b(?:' + abbreviations_regex + r'))'  # Negative lookbehind for abbreviations
+        r'(?<=[.!?]["\']?)'                         # Positive lookbehind for punctuation and optional quote marks
+        r'\s+'                                      # Split on whitespace
+    )
+
+    sentences = pattern.split(text.strip())
     return sentences
 
 def display_paragraphs(current_paragraph_index, chapter_elements, paragraph_indices):
