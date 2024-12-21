@@ -63,15 +63,9 @@ def display_paragraphs(paragraph_index, processed_paragraphs):
             bottom-margin: 20px;
             padding: 15px;
             border: 1px solid var(--primary-color);
+            /* Remove or set background-color to transparent */
+            /* background-color: transparent; */
             transition: text-shadow 0.5s;
-        """
-        highlighted_style = """
-            background-color: var(--highlight-color-{index});
-            padding: 2px 5px;
-            border-radius: 5px;
-            color: var(--text-color);
-            position: relative;
-            z-index: 1;
         """
 
         # Parse the paragraph_html to get the text
@@ -90,9 +84,19 @@ def display_paragraphs(paragraph_index, processed_paragraphs):
 
         if is_highlighted:
             sentences = paragraph_text.strip().split('. ')
-            highlighted_sentence = [
-                f'<span style="{highlighted_style.format(index=j % 5)}">{sentence.strip()}{"." if not sentence.strip().endswith(".") else ""}</span>'
-                for j, sentence in enumerate(sentences)]
+            highlighted_sentence = []
+            for j, sentence in enumerate(sentences):
+                color_variable = f"var(--color-{j%5 +1})"
+                highlighted_style = f"""
+                    background-color: {color_variable};
+                    padding: 2px 5px;
+                    border-radius: 5px;
+                    color: var(--text-color);
+                    position: relative;
+                    z-index: 1;
+                """
+                sentence_html = f'<span style="{highlighted_style}">{sentence.strip()}{"." if not sentence.strip().endswith(".") else ""}</span>'
+                highlighted_sentence.append(sentence_html)
             paragraph_content = ' '.join(highlighted_sentence)
             html_content += f"<div style='{font_style}'>{paragraph_content}</div>"
         else:
@@ -102,57 +106,44 @@ def display_paragraphs(paragraph_index, processed_paragraphs):
     # Display the HTML content using Streamlit
     st.write(html_content, unsafe_allow_html=True)
 
-def inject_custom_css():
-    css = """
+def main():
+
+    # Inject CSS styles
+    st.markdown("""
     <style>
     :root {
-        /* Light mode colors */
-        --highlight-color-0: #ffd54f;
-        --highlight-color-1: #aed581;
-        --highlight-color-2: #64b5f6;
-        --highlight-color-3: #f06292;
-        --highlight-color-4: #b39ddb;
+        /* Dark theme colors */
+        --color-1: #d32f2f;
+        --color-2: #1976d2;
+        --color-3: #388e3c;
+        --color-4: #512da8;
+        --color-5: rgba(251, 192, 45, 0.9);
     }
 
-    @media (prefers-color-scheme: dark) {
+    @media (prefers-color-scheme: light) {
         :root {
-            /* Dark mode colors with adjusted opacity */
-            --highlight-color-0: rgba(251, 192, 45, 0.9); /* Semi-transparent yellow */
-            --highlight-color-1: #d32f2f;
-            --highlight-color-2: #1976d2;
-            --highlight-color-3: #388e3c;
-            --highlight-color-4: #512da8;
+            /* Light theme colors */
+            --color-1: #ffd54f;
+            --color-2: #aed581;
+            --color-3: #64b5f6;
+            --color-4: #f06292;
+            --color-5: rgba(251, 192, 45, 0.9); /* Adjust opacity here */
+        }
+    }
+
+    /* Hide the Streamlit style elements (hamburger menu, header, footer) */
+    #MainMenu {visibility: hidden;}
+    header {visibility: hidden;}
+    footer {visibility: hidden;}
+
+    /* Responsive font sizes for mobile devices */
+    @media only screen and (max-width: 600px) {
+        div[style] {
+            font-size: 5vw !important;
         }
     }
     </style>
-    """
-    st.markdown(css, unsafe_allow_html=True)
-
-def main():
-    # Inject the custom CSS into the app
-    inject_custom_css()
-
-    # Hide the Streamlit style elements (hamburger menu, header, footer)
-    hide_streamlit_style = """
-        <style>
-        #MainMenu {visibility: hidden;}
-        header {visibility: hidden;}
-        footer {visibility: hidden;}
-        </style>
-        """
-    st.markdown(hide_streamlit_style, unsafe_allow_html=True)
-
-    # Responsive font sizes for mobile devices
-    responsive_styles = """
-        <style>
-        @media only screen and (max-width: 600px) {
-            div[style] {
-                font-size: 5vw !important;
-            }
-        }
-        </style>
-    """
-    st.markdown(responsive_styles, unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
     st.title("Reader")
 
