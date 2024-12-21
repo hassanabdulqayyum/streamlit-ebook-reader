@@ -9,7 +9,7 @@ import re
 
 def get_toc_map(book):
     """
-    Creates a mapping from href to title using the book's table of contents (toc).
+    Creates a mapping from href to title using the book's table of contents (TOC).
     """
     toc_map = {}
 
@@ -19,16 +19,23 @@ def get_toc_map(book):
                 href = entry.href.split("#")[0] if entry.href else ''
                 title = entry.title
                 toc_map[href.lstrip('/')] = title
-            elif isinstance(entry, epub.Section):
-                href = entry.href.split("#")[0] if entry.href else ''
-                title = entry.title
-                toc_map[href.lstrip('/')] = title
-                # Recursively parse nested entries using 'children'
-                if entry.children:
-                    parse_toc_entries(entry.children)
-            elif isinstance(entry, (list, tuple)):
-                parse_toc_entries(entry)
+            elif isinstance(entry, tuple):
+                # Entry can be a tuple: (epub.Section, list of subentries)
+                section = entry[0]
+                subentries = entry[1]
+                
+                if isinstance(section, epub.Section):
+                    href = section.href.split("#")[0] if section.href else ''
+                    title = section.title
+                    toc_map[href.lstrip('/')] = title
+                    # Recursively parse subentries
+                    if isinstance(subentries, (list, tuple)):
+                        parse_toc_entries(subentries)
+                else:
+                    # Handle other possible structures if necessary
+                    pass
             else:
+                # Handle other possible types if necessary
                 pass
 
     parse_toc_entries(book.toc)
@@ -326,6 +333,7 @@ def main():
                 st.write("No paragraphs found in this chapter.")
                 return
 
+            # Initialize session state for the current paragraph index
             if 'current_paragraph_index' not in st.session_state:
                 st.session_state.current_paragraph_index = 0
 
