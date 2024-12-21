@@ -72,6 +72,27 @@ def get_content_units(soup):
         for elem in soup.contents:
             process_element(elem)
 
+    # Handle nested lists within paragraphs
+    # We'll scan paragraphs for any nested lists and extract them
+    updated_content_units = []
+    for cu in content_units:
+        if cu['type'] == 'paragraph':
+            soup = BeautifulSoup(cu['content'], 'html.parser')
+            lists = soup.find_all(['ul', 'ol'])
+            if lists:
+                # Remove lists from paragraph content and add them as separate content units
+                for lst in lists:
+                    # Remove the list from the paragraph
+                    lst.extract()
+                    # Add the list as a separate content unit
+                    updated_content_units.append({'type': 'list', 'content': str(lst)})
+                # Update the paragraph content without the lists
+                cu['content'] = str(soup)
+            updated_content_units.append(cu)
+        else:
+            updated_content_units.append(cu)
+    content_units = updated_content_units
+
     return content_units
 
 def get_display_content(paragraph_index, content_units):
@@ -169,6 +190,14 @@ def display_paragraphs(display_units, paragraph_index, content_units):
             if cu == content_units[curr_para_pos]:
                 # Highlight the paragraph
                 soup = BeautifulSoup(content_html, 'html.parser')
+
+                # Handle any lists within the paragraph
+                lists = soup.find_all(['ul', 'ol'])
+                for lst in lists:
+                    # Replace lists with placeholders to prevent splitting sentences within lists
+                    placeholder = f"__LIST_PLACEHOLDER_{id(lst)}__"
+                    lst.replace_with(placeholder)
+
                 paragraph_text = soup.get_text()
                 sentences = paragraph_text.strip().split('. ')
                 highlighted_sentences = []
@@ -184,6 +213,12 @@ def display_paragraphs(display_units, paragraph_index, content_units):
                         # Ensure proper punctuation at the end
                         if not sentence.endswith('.'):
                             sentence += '.'
+                        # Replace placeholders back with the list HTML
+                        if "__LIST_PLACEHOLDER_" in sentence:
+                            for lst in lists:
+                                placeholder = f"__LIST_PLACEHOLDER_{id(lst)}__"
+                                if placeholder in sentence:
+                                    sentence = sentence.replace(placeholder, str(lst))
                         sentence_html = f'<span style="{highlighted_style}">{sentence.strip()}</span>'
                         highlighted_sentences.append(sentence_html)
                 paragraph_content = ' '.join(highlighted_sentences)
