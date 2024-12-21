@@ -47,8 +47,30 @@ def get_content_units(soup):
                     # Skip or treat as needed
                     pass
                 else:
-                    # Regular paragraph
-                    content_units.append({'type': 'paragraph', 'content': str(element)})
+                    # Check if the paragraph starts with italicized text that acts as a heading
+                    first_child = element.find()
+                    if first_child and first_child.name == 'span':
+                        inner_child = first_child.find()
+                        if inner_child and inner_child.name == 'i':
+                            # Split the paragraph into heading and paragraph
+                            heading_text = str(inner_child)
+                            # Remove the italicized text from the paragraph
+                            inner_child.extract()
+
+                            # Get the remaining text
+                            remaining_text = element.get_text(strip=True)
+                            # Add heading unit
+                            content_units.append({'type': 'heading', 'content': heading_text})
+                            # Add the rest as a paragraph if there is any text left
+                            if remaining_text:
+                                paragraph_html = str(element)
+                                content_units.append({'type': 'paragraph', 'content': paragraph_html})
+                        else:
+                            # Regular paragraph
+                            content_units.append({'type': 'paragraph', 'content': str(element)})
+                    else:
+                        # Regular paragraph
+                        content_units.append({'type': 'paragraph', 'content': str(element)})
             elif element.name == 'div':
                 # Process children of the div
                 for child in element.contents:
