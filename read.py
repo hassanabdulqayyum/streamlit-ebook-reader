@@ -7,14 +7,14 @@ import os
 
 
 def get_theme_colors():
-   theme_mode = st.get_option('theme.base')
-   if theme_mode == 'dark':
-      # Define colors suitable for dark mode (darker shades)
-      colors = ["#d32f2f", "#7b1fa2", "#1976d2", "#388e3c", "#fbc02d"]  # Darker shades
-   else:
-      # Define colors suitable for light mode (lighter pastel shades)
-      colors = ["#ffd54f", "#aed581", "#64b5f6", "#f06292", "#b39ddb"]
-   return colors
+    theme_mode = st.get_option('theme.base')
+    if theme_mode == 'dark':
+        # Define colors suitable for dark mode (darker shades)
+        colors = ["#d32f2f", "#7b1fa2", "#1976d2", "#388e3c", "#fbc02d"]  # Darker shades
+    else:
+        # Define colors suitable for light mode (lighter pastel shades)
+        colors = ["#ffd54f", "#aed581", "#64b5f6", "#f06292", "#b39ddb"]
+    return colors
 
 # Colors for highlighting sentences
 colors = get_theme_colors()
@@ -22,6 +22,15 @@ colors = get_theme_colors()
 def get_color(index):
     # Cycle through the color list based on the sentence index
     return colors[index % len(colors)]
+
+def get_contrast_color(bg_color):
+    """
+    Given a background color in hex format, returns '#000000' (black) or '#FFFFFF' (white) depending on contrast.
+    """
+    bg_color = bg_color.lstrip('#')
+    r, g, b = int(bg_color[0:2],16), int(bg_color[2:4],16), int(bg_color[4:6],16)
+    yiq = ((r*299)+(g*587)+(b*114))/1000
+    return '#000000' if yiq >= 128 else '#FFFFFF'
 
 def get_processed_paragraphs(soup):
     """
@@ -74,21 +83,14 @@ def display_paragraphs(paragraph_index, processed_paragraphs):
                font-family: Georgia, serif;
                font-weight: 450;
                font-size: 20px;
-               color: var(--text-color);
+               color: inherit;
                line-height: 1.6;
                max-width: 1000px;
                margin: 10px auto;
-               bottom-margin: 20px;
                padding: 15px;
-               border: 1px solid var(--primary-color);
-               background-color: var(--background-color);
+               border: 1px solid transparent;
+               background-color: transparent;
                transition: text-shadow 0.5s;
-        """
-        highlighted_style = """
-                background-color: {color};
-                padding: 2px 5px;
-                border-radius: 5px;
-                color: var(--text-color);  /* Ensure text color matches theme's text color */
         """
         
         # Parse the paragraph_html to get the text
@@ -107,10 +109,15 @@ def display_paragraphs(paragraph_index, processed_paragraphs):
         
         if is_highlighted:
             sentences = paragraph_text.strip().split('. ')
-            highlighted_sentence = [
-                f'<span style="{highlighted_style.format(color=get_color(j))}">{sentence.strip()}{"." if not sentence.strip().endswith(".") else ""}</span>'
-                for j, sentence in enumerate(sentences)]
-            paragraph_content = ' '.join(highlighted_sentence)
+            highlighted_sentences = []
+            for j, sentence in enumerate(sentences):
+                bg_color = get_color(j)
+                text_color = get_contrast_color(bg_color)
+                # Build the inline style with computed background and text colors
+                style = f"background-color: {bg_color}; padding: 2px 5px; border-radius: 5px; color: {text_color};"
+                formatted_sentence = f'<span style="{style}">{sentence.strip()}{"." if not sentence.strip().endswith(".") else ""}</span>'
+                highlighted_sentences.append(formatted_sentence)
+            paragraph_content = ' '.join(highlighted_sentences)
             html_content += f"<div style='{font_style}'>{paragraph_content}</div>"
         else:
             # Include any images or captions in the paragraph_html
