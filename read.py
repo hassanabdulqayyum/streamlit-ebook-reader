@@ -10,7 +10,7 @@ def get_theme_colors():
     theme_mode = st.get_option('theme.base')
     if theme_mode == 'dark':
         # Define darker colors suitable for dark mode
-        colors = ["#b71c1c", "#1976d2", "#388e3c", "#512da8", "#fbc02d"]
+        colors = ["#d32f2f", "#1976d2", "#388e3c", "#512da8", "#c49000"]
     else:
         # Define lighter pastel shades for light mode
         colors = ["#ffd54f", "#aed581", "#64b5f6", "#f06292", "#b39ddb"]
