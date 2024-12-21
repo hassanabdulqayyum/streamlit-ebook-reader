@@ -17,11 +17,15 @@ def get_processed_elements(soup):
     # Assuming that the content is within 'body' tag
     body = soup.body if soup.body else soup
 
-    # Iterate through the direct children of the body
-    for elem in body.children:
+    # Iterate through all descendants of the body
+    for elem in body.descendants:
         if isinstance(elem, NavigableString):
-            continue  # Skip strings directly under body (unlikely)
-        if isinstance(elem, Tag):
+            # Skip strings that are just whitespace or newline characters
+            if not elem.strip():
+                continue
+            # Wrap standalone strings in a span for uniform handling
+            elements.append({'type': 'text', 'content': elem})
+        elif isinstance(elem, Tag):
             if elem.name == 'p':
                 p_class = elem.get('class', [])
                 is_paragraph = 'para' in p_class or 'chapterOpenerText' in p_class or 'paragraph' in p_class or not p_class
@@ -36,6 +40,15 @@ def get_processed_elements(soup):
                 elements.append({'type': 'heading', 'content': elem})
             elif elem.name == 'img':
                 elements.append({'type': 'image', 'content': elem})
+            elif elem.name == 'div':
+                # Some divs may contain paragraphs or other content
+                div_class = elem.get('class', [])
+                is_paragraph = 'paragraph' in div_class or 'para' in div_class or 'text' in div_class
+                if is_paragraph:
+                    elements.append({'type': 'paragraph', 'content': elem})
+                else:
+                    # Handle other div types if needed
+                    elements.append({'type': 'other', 'content': elem})
             else:
                 # Handle other elements if needed
                 elements.append({'type': 'other', 'content': elem})
@@ -48,7 +61,7 @@ def split_sentences(text):
         (?<!\b\w\.\w\.)           # Negative lookbehind for strings like "e.g."
         (?<!\b[A-Z][a-z]\.)       # Negative lookbehind for abbreviations like "Dr."
         (?<!\s[A-Z])              # Negative lookbehind for single capital letters
-        (?<=\.|\?|!)              # Positive lookbehind for punctuation
+        (?<=\.|\?|!|\.\")         # Positive lookbehind for punctuation or punctuation followed by quote
         \s+                       # Split on whitespace
         ''', re.VERBOSE)
     sentences = sentence_endings.split(text.strip())
@@ -59,6 +72,10 @@ def display_paragraphs(current_paragraph_index, chapter_elements, paragraph_indi
     Displays elements around the current paragraph, highlighting the middle paragraph.
     Non-paragraph elements like headings, captions, images are displayed appropriately.
     """
+    if not paragraph_indices:
+        st.write("No paragraphs found in this chapter.")
+        return
+
     # Get indices of the previous, current, and next paragraphs
     paragraph_count = len(paragraph_indices)
     prev_index = max(current_paragraph_index -1, 0)
@@ -67,6 +84,10 @@ def display_paragraphs(current_paragraph_index, chapter_elements, paragraph_indi
     # Get the positions in the elements list
     start_elem_index = paragraph_indices[prev_index]
     end_elem_index = paragraph_indices[next_index]
+
+    # Ensure start_elem_index <= end_elem_index
+    if start_elem_index > end_elem_index:
+        start_elem_index, end_elem_index = end_elem_index, start_elem_index
 
     # Get elements from start_elem_index to end_elem_index, including any non-paragraph elements in between
     display_elements = chapter_elements[start_elem_index:end_elem_index+1]
@@ -139,8 +160,9 @@ def display_paragraphs(current_paragraph_index, chapter_elements, paragraph_indi
             # Handle image display
             img_src = elem_content.get('src')
             if img_src and not img_src.startswith('http'):
-                # If src is relative, display a placeholder or handle appropriately
-                img_html = f"<div style='text-align:center;'>[Image placeholder]</div>"
+                # Handle relative image paths
+                # For simplicity, displaying a placeholder
+                img_html = f"<div style='text-align:center;'>[Image]</div>"
             else:
                 img_html = f"<img src='{img_src}' alt='Image' style='max-width: 100%; height: auto;'>"
             html_content += img_html
@@ -157,6 +179,11 @@ def display_paragraphs(current_paragraph_index, chapter_elements, paragraph_indi
                 padding: 15px;
             """
             html_content += f"<div style='{caption_style}'>{caption_text}</div>"
+        elif elem_type == 'text':
+            # Handle standalone text
+            text_content = str(elem_content).strip()
+            if text_content:
+                html_content += f"<div style='{font_style}'>{text_content}</div>"
         else:
             # Handle other types if needed
             other_text = elem_content.get_text(separator=' ').strip()
@@ -233,8 +260,14 @@ def main():
             if item.get_type() == ebooklib.ITEM_DOCUMENT:
                 chapters.append(item)
                 # Attempt to get the chapter title
-                title = item.get_name()
-                # Alternatively, use item.get_title() if available
+                title = None
+                # Try to get title from item's metadata
+                if 'title' in item.get_metadata():
+                    title = item.get_metadata('title')[0][0]
+                if not title:
+                    title = item.get_name()
+                if not title:
+                    title = f"Chapter {len(chapter_titles)+1}"
                 chapter_titles.append(title)
 
         if chapters:
@@ -250,6 +283,11 @@ def main():
 
             # Build a list of indices of paragraph elements
             paragraph_indices = [i for i, elem in enumerate(chapter_elements) if elem['type'] == 'paragraph']
+
+            # If no paragraphs are found, display a message
+            if not paragraph_indices:
+                st.write("No paragraphs found in this chapter.")
+                return
 
             if 'current_paragraph_index' not in st.session_state:
                 st.session_state.current_paragraph_index = 0
