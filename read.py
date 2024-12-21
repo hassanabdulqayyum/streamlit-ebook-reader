@@ -1,6 +1,7 @@
 import streamlit as st
 import ebooklib  # Import the ebooklib module
 from ebooklib import epub
+import bs4  # Import the bs4 module
 from bs4 import BeautifulSoup
 import tempfile
 import os
@@ -29,9 +30,9 @@ def get_processed_elements(soup):
     Classify elements as paragraphs, headings, images, captions, etc.
     """
     processed_elements = []
-    # Loop over all direct children of body
+    # Loop over all direct children of body or the entire soup if body is None
     if soup.body is None:
-        body_elements = soup.find_all()
+        body_elements = soup.find_all(recursive=False)
     else:
         body_elements = list(soup.body.children)
     for element in body_elements:
