@@ -57,8 +57,61 @@ def get_processed_paragraphs(soup):
     return processed_paragraphs
 
 def display_paragraphs(paragraph_index, processed_paragraphs):
-    # The updated function as shown above
-    # ...
+    # Extract the three paragraphs to be displayed
+    display_paragraphs = processed_paragraphs[max(paragraph_index-1, 0):paragraph_index+2]
+    
+    html_content = ""
+    
+    for i, paragraph_html in enumerate(display_paragraphs):
+        # Define base font style for readability
+        font_style = """
+               font-family: Georgia, serif;
+               font-weight: 450;
+               font-size: 20px;
+               color: var(--text-color);
+               line-height: 1.6;
+               max-width: 1000px;
+               margin: 10px auto;
+               bottom-margin: 20px;
+               padding: 15px;
+               border: 1px solid var(--primary-color);
+               background-color: var(--background-color);
+               transition: text-shadow 0.5s;
+        """
+        highlighted_style = """
+            background-color: {color};
+            padding: 0 2px;
+            border-radius: 3px;
+            color: var(--text-color);
+        """
+        
+        # Parse the paragraph_html to get the text
+        soup = BeautifulSoup(paragraph_html, 'html.parser')
+        
+        # Get the combined text of the paragraph and any associated elements
+        paragraph_text = ''
+        for content in soup.contents:
+            if content.name == 'p':
+                paragraph_text += content.get_text(separator=' ') + ' '
+            else:
+                paragraph_text += str(content) + ' '  # Include images or other tags
+        
+        # Highlight the middle paragraph (or first if at the beginning)
+        is_highlighted = (paragraph_index == 0 and i == 0) or (paragraph_index != 0 and i == 1)
+        
+        if is_highlighted:
+            sentences = paragraph_text.strip().split('. ')
+            highlighted_sentence = [
+                f'<span style="{highlighted_style.format(color=get_color(j))}">{sentence.strip()}{"." if not sentence.strip().endswith(".") else ""}</span>'
+                for j, sentence in enumerate(sentences)]
+            paragraph_content = ' '.join(highlighted_sentence)
+            html_content += f"<div style='{font_style}'>{paragraph_content}</div>"
+        else:
+            # Include any images or captions in the paragraph_html
+            html_content += f"<div style='{font_style}'>{paragraph_text}</div>"
+    
+    # Display the HTML content using Streamlit
+    st.write(html_content, unsafe_allow_html=True)
 
 def main():
     st.title("EPUB Reader")
