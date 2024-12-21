@@ -1,7 +1,6 @@
 import streamlit as st
 import ebooklib
 from ebooklib import epub
-import bs4
 from bs4 import BeautifulSoup, NavigableString, Tag
 import tempfile
 import os
@@ -16,7 +15,7 @@ def get_content_units(soup):
     def process_element(element):
         """Recursively process element and its children."""
         if isinstance(element, NavigableString):
-            # Ignore strings directly under body/div, unless they contain meaningful text
+            # Ignore strings that are whitespace
             if element.strip():
                 # Wrap the text in a paragraph unit if it's significant
                 content_units.append({'type': 'text', 'content': str(element)})
@@ -36,6 +35,12 @@ def get_content_units(soup):
                 elif 'centerImage' in p_class:
                     # Image (wrapped in a <p> tag)
                     content_units.append({'type': 'image', 'content': str(element)})
+                elif 'chapterSubtitle' in p_class or 'chapterSubtitle1' in p_class or 'chapterOpenerText' in p_class:
+                    # Treat these as headings
+                    content_units.append({'type': 'heading', 'content': str(element)})
+                elif 'spaceBreak1' in p_class:
+                    # Skip or treat as needed
+                    pass
                 else:
                     # Regular paragraph
                     content_units.append({'type': 'paragraph', 'content': str(element)})
@@ -104,8 +109,9 @@ def get_display_content(paragraph_index, content_units):
         idx = paragraph_pos - 1
         # Collect headings in reverse order until we hit a non-heading element
         headings = []
-        while idx >= 0 and content_units[idx]['type'] == 'heading':
-            headings.insert(0, content_units[idx])  # Insert at the beginning
+        while idx >= 0 and content_units[idx]['type'] in ['heading', 'image', 'caption']:
+            if content_units[idx]['type'] == 'heading':
+                headings.insert(0, content_units[idx])  # Insert at the beginning
             idx -= 1
 
         # Add headings to display units
@@ -116,7 +122,7 @@ def get_display_content(paragraph_index, content_units):
 
         # Collect any non-paragraph content units immediately after the paragraph
         idx = paragraph_pos + 1
-        while idx < len(content_units) and content_units[idx]['type'] in ['caption', 'image', 'list', 'other_p']:
+        while idx < len(content_units) and content_units[idx]['type'] in ['caption', 'image', 'list']:
             display_units.append(content_units[idx])
             idx += 1
 
@@ -160,11 +166,11 @@ def display_paragraphs(display_units, paragraph_index, content_units):
             html_content += f"<div style='{heading_style}'>{content_html}</div>"
         elif content_type == 'paragraph':
             # Determine if this is the current paragraph to highlight
-            if content_units.index(cu) == curr_para_pos:
+            if cu == content_units[curr_para_pos]:
                 # Highlight the paragraph
                 soup = BeautifulSoup(content_html, 'html.parser')
                 paragraph_text = soup.get_text()
-                sentences = paragraph_text.split('. ')
+                sentences = paragraph_text.strip().split('. ')
                 highlighted_sentences = []
                 for j, sentence in enumerate(sentences):
                     color_variable = f"var(--color-{j%5 +1})"
@@ -175,7 +181,10 @@ def display_paragraphs(display_units, paragraph_index, content_units):
                         color: var(--text-color);
                     """
                     if sentence.strip():
-                        sentence_html = f'<span style="{highlighted_style}">{sentence.strip()}{"." if not sentence.strip().endswith(".") else ""}</span>'
+                        # Ensure proper punctuation at the end
+                        if not sentence.endswith('.'):
+                            sentence += '.'
+                        sentence_html = f'<span style="{highlighted_style}">{sentence.strip()}</span>'
                         highlighted_sentences.append(sentence_html)
                 paragraph_content = ' '.join(highlighted_sentences)
                 html_content += f"<div style='{font_style}'>{paragraph_content}</div>"
@@ -243,7 +252,7 @@ def main():
     </style>
     """, unsafe_allow_html=True)
 
-    st.title("Reader")
+    st.title("EPUB Reader")
 
     # Move file uploader to sidebar
     uploaded_file = st.sidebar.file_uploader("Choose an EPUB file", type="epub")
