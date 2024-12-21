@@ -78,7 +78,7 @@ def display_paragraphs(paragraph_index, processed_paragraphs):
                line-height: 1.6;
                max-width: 1000px;
                margin: 20px auto;
-               bottom-margin: 40px;
+               bottom-margin: 20px;
                padding: 15px;
                border: 1px solid var(--primary-color);
                background-color: var(--background-color);
