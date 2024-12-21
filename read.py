@@ -72,7 +72,7 @@ def get_content_units(soup):
 def get_display_content(paragraph_index, content_units):
     """
     Given the current paragraph index, return the content units to display.
-    Includes the previous, current, and next paragraphs, along with any associated non-paragraph content units.
+    Includes the headings associated with each paragraph, and ensures three paragraphs are displayed.
     """
     # Build a list of indices of paragraphs
     paragraph_indices = [i for i, cu in enumerate(content_units) if cu['type'] == 'paragraph']
@@ -89,17 +89,36 @@ def get_display_content(paragraph_index, content_units):
     elif paragraph_index >= num_paragraphs:
         paragraph_index = num_paragraphs - 1
 
-    # Get the positions in content_units for the previous, current, and next paragraphs
-    curr_para_pos = paragraph_indices[paragraph_index]
-    prev_para_pos = paragraph_indices[paragraph_index - 1] if paragraph_index > 0 else curr_para_pos
-    next_para_pos = paragraph_indices[paragraph_index + 1] if paragraph_index + 1 < num_paragraphs else curr_para_pos
+    # Get indices for the three paragraphs
+    indices_to_show = []
+    for offset in [-1, 0, 1]:
+        para_idx = paragraph_index + offset
+        if 0 <= para_idx < num_paragraphs:
+            indices_to_show.append(para_idx)
 
-    # Determine start and end indices for slicing content_units
-    start_idx = prev_para_pos
-    end_idx = next_para_pos
+    display_units = []
+    for para_idx in indices_to_show:
+        paragraph_pos = paragraph_indices[para_idx]
 
-    # Collect content units from start_idx to end_idx inclusive
-    display_units = content_units[start_idx:end_idx + 1]
+        # Collect any headings immediately preceding the paragraph
+        idx = paragraph_pos - 1
+        # Collect headings in reverse order until we hit a non-heading element
+        headings = []
+        while idx >= 0 and content_units[idx]['type'] == 'heading':
+            headings.insert(0, content_units[idx])  # Insert at the beginning
+            idx -= 1
+
+        # Add headings to display units
+        display_units.extend(headings)
+
+        # Add the paragraph
+        display_units.append(content_units[paragraph_pos])
+
+        # Collect any non-paragraph content units immediately after the paragraph
+        idx = paragraph_pos + 1
+        while idx < len(content_units) and content_units[idx]['type'] in ['caption', 'image', 'list', 'other_p']:
+            display_units.append(content_units[idx])
+            idx += 1
 
     return display_units, paragraph_index
 
@@ -137,7 +156,7 @@ def display_paragraphs(display_units, paragraph_index, content_units):
         """
         if content_type == 'heading':
             # Apply heading styles
-            heading_style = font_style + "font-size: 24px; font-weight: bold;"
+            heading_style = font_style + "font-size: 28px; font-weight: bold; border: none; padding-top: 30px;"
             html_content += f"<div style='{heading_style}'>{content_html}</div>"
         elif content_type == 'paragraph':
             # Determine if this is the current paragraph to highlight
@@ -165,7 +184,7 @@ def display_paragraphs(display_units, paragraph_index, content_units):
                 html_content += f"<div style='{font_style}'>{content_html}</div>"
         elif content_type == 'caption':
             # Apply caption style
-            caption_style = font_style + "font-size: 18px; font-style: italic;"
+            caption_style = font_style + "font-size: 18px; font-style: italic; border: none;"
             html_content += f"<div style='{caption_style}'>{content_html}</div>"
         elif content_type == 'image':
             # Apply image style
@@ -192,7 +211,7 @@ def main():
         --color-2: #1976d2;
         --color-3: #388e3c;
         --color-4: #512da8;
-        --color-5: rgba(251, 192, 45, 0.9);
+        --color-5: #FBC02D;
         --text-color: #FFFFFF;
         --primary-color: #0E1117;
     }
@@ -204,7 +223,7 @@ def main():
             --color-2: #aed581;
             --color-3: #64b5f6;
             --color-4: #f06292;
-            --color-5: rgba(251, 192, 45, 0.9);
+            --color-5: #FBC02D;
             --text-color: #000000;
             --primary-color: #FFFFFF;
         }
@@ -271,8 +290,9 @@ def main():
             paragraph_indices = [i for i, cu in enumerate(content_units) if cu['type'] == 'paragraph']
 
             # Initialize session state for the paragraph index
-            if 'current_paragraph' not in st.session_state:
+            if 'current_paragraph' not in st.session_state or st.session_state.chapter != selected_chapter:
                 st.session_state.current_paragraph = 0
+                st.session_state.chapter = selected_chapter  # Keep track of selected chapter
 
             # Display navigation buttons
             col1, col2, col3 = st.columns([1, 1, 1])
