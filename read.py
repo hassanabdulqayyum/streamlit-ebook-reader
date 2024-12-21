@@ -16,17 +16,20 @@ def get_toc_map(book):
     def parse_toc_entries(entries):
         for entry in entries:
             if isinstance(entry, epub.Link):
-                href = entry.href.split("#")[0]  # Remove anchor if present
+                href = entry.href.split("#")[0] if entry.href else ''
                 title = entry.title
-                toc_map[href] = title
+                toc_map[href.lstrip('/')] = title
             elif isinstance(entry, epub.Section):
-                href = entry.href.split("#")[0]
+                href = entry.href.split("#")[0] if entry.href else ''
                 title = entry.title
-                toc_map[href] = title
-                # Recursively parse nested entries
-                parse_toc_entries(entry.subitems)
+                toc_map[href.lstrip('/')] = title
+                # Recursively parse nested entries using 'children'
+                if entry.children:
+                    parse_toc_entries(entry.children)
             elif isinstance(entry, (list, tuple)):
                 parse_toc_entries(entry)
+            else:
+                pass
 
     parse_toc_entries(book.toc)
     return toc_map
