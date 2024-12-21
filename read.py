@@ -2,6 +2,7 @@ import streamlit as st
 import ebooklib
 from ebooklib import epub
 from bs4 import BeautifulSoup
+import bs4
 import tempfile
 import os
 
