@@ -1,56 +1,97 @@
 import streamlit as st
 import ebooklib  # Import the ebooklib module
 from ebooklib import epub
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag, NavigableString
 import tempfile
 import os
+import re
 
-def get_processed_paragraphs(soup):
+def get_processed_elements(soup):
     """
-    Processes the HTML soup to generate a list of paragraph contents.
-    Non-paragraph elements like captions and images are appended to the next paragraph.
+    Processes the HTML soup and generates a list of elements with their types.
+    Elements can be paragraphs, headings, images, captions, etc.
     """
-    processed_paragraphs = []
-    temp_content = ''
-    p_tags = soup.find_all('p')
+    processed_elements = []
 
-    for p in p_tags:
-        p_class = p.get('class', [])
-        is_paragraph = 'para' in p_class or 'chapterOpenerText' in p_class
+    # Let's iterate over the body content
+    body = soup.find('body')
+    if body is None:
+        # Sometimes the content might not be within <body> tag
+        body = soup
 
-        if is_paragraph:
-            # Append temp content to this paragraph if temp_content is not empty
-            if temp_content:
-                full_content = temp_content + '\n' + str(p)
-                temp_content = ''
+    for element in body.contents:
+        if isinstance(element, Tag):
+            # Determine the type
+            if element.name == 'p':
+                p_class = element.get('class', [])
+                is_paragraph = (
+                    'para' in p_class
+                    or 'chapterOpenerText' in p_class
+                    or 'paragraph' in p_class
+                    or not p_class  # Consider paragraphs without class
+                )
+
+                if is_paragraph:
+                    processed_elements.append({'type': 'paragraph', 'content': element})
+                else:
+                    processed_elements.append({'type': 'caption', 'content': element})
+            elif element.name in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
+                processed_elements.append({'type': 'heading', 'content': element})
+            elif element.name == 'img':
+                processed_elements.append({'type': 'image', 'content': element})
             else:
-                full_content = str(p)
-            processed_paragraphs.append(full_content)
-        else:
-            # Collect the content in temp_content to be added to the next paragraph
-            temp_content += str(p) + '\n'
+                # Other elements, treat as needed
+                processed_elements.append({'type': 'other', 'content': element})
+        elif isinstance(element, NavigableString):
+            # Text directly under body
+            text = element.strip()
+            if text:
+                processed_elements.append({'type': 'text', 'content': text})
 
-    # Handle any remaining temp_content (if last elements are not paragraphs)
-    if temp_content:
-        # Append to the last paragraph if exists, else add as a new paragraph
-        if processed_paragraphs:
-            processed_paragraphs[-1] += '\n' + temp_content
-        else:
-            processed_paragraphs.append(temp_content)
+    return processed_elements
 
-    return processed_paragraphs
-
-def display_paragraphs(paragraph_index, processed_paragraphs):
+def split_sentences(text):
     """
-    Displays three paragraphs at a time, highlighting the middle one.
-    Other elements like captions and images are displayed as part of the paragraph.
+    Splits the text into sentences while avoiding splitting at references or abbreviations.
     """
-    # Extract the three paragraphs to be displayed
-    display_paragraphs = processed_paragraphs[max(paragraph_index-1, 0):paragraph_index+2]
+    # First, replace periods within brackets to prevent splitting inside references
+    text = re.sub(r'\[(.*?)\]', lambda x: x.group(0).replace('.', ''), text)
+    text = re.sub(r'\((.*?)\)', lambda x: x.group(0).replace('.', ''), text)
 
+    # Now split sentences at period, question mark, or exclamation mark followed by space or end of line
+    pattern = re.compile(r'(?<=[.!?])\s+')
+    sentences = pattern.split(text)
+    return sentences
+
+def display_paragraphs(paragraph_index, processed_elements, paragraph_indices):
+    """
+    Displays paragraphs, highlighting the middle one. Handles different elements appropriately.
+    """
+    # Get the index in paragraph_indices corresponding to paragraph_index
+    para_idx_in_indices = paragraph_index  # As we are maintaining paragraph_index in session state
+    # Make sure para_idx_in_indices is within range
+    para_idx_in_indices = max(0, min(para_idx_in_indices, len(paragraph_indices) - 1))
+
+    # Get indices of previous, current, and next paragraphs in processed_elements
+    indices_to_display = []
+
+    if para_idx_in_indices > 0:
+        start_idx = paragraph_indices[para_idx_in_indices - 1]
+    else:
+        start_idx = paragraph_indices[para_idx_in_indices]
+
+    end_idx = paragraph_indices[min(para_idx_in_indices + 1, len(paragraph_indices) - 1)] + 1
+
+    # Slice the elements to display
+    elements_to_display = processed_elements[start_idx:end_idx]
+
+    # Display the elements
     html_content = ""
 
-    for i, paragraph_html in enumerate(display_paragraphs):
+    for elem in elements_to_display:
+        elem_type = elem['type']
+        content = elem['content']
+
         # Define base font style for readability
         font_style = """
             font-family: Georgia, serif;
@@ -68,46 +109,59 @@ def display_paragraphs(paragraph_index, processed_paragraphs):
             transition: text-shadow 0.5s;
         """
 
-        # Parse the paragraph_html to get the text
-        soup = BeautifulSoup(paragraph_html, 'html.parser')
+        # Determine if this is the middle paragraph to be highlighted
+        is_highlighted = (elem_type == 'paragraph' and elem == processed_elements[paragraph_indices[para_idx_in_indices]])
 
-        # Get the combined text of the paragraph and any associated elements
-        paragraph_text = ''
-        for content in soup.contents:
-            if content.name == 'p':
-                paragraph_text += content.get_text(separator=' ') + ' '
-            else:
-                paragraph_text += str(content) + ' '  # Include images or other tags
-
-        # Highlight the middle paragraph (or first if at the beginning)
-        is_highlighted = (paragraph_index == 0 and i == 0) or (paragraph_index != 0 and i == 1)
-
-        if is_highlighted:
-            sentences = paragraph_text.strip().split('. ')
-            highlighted_sentence = []
-            for j, sentence in enumerate(sentences):
-                color_variable = f"var(--color-{j%5 +1})"
-                highlighted_style = f"""
-                    background-color: {color_variable};
-                    padding: 2px 5px;
-                    border-radius: 5px;
-                    color: var(--text-color);
-                    position: relative;
-                    z-index: 1;
-                """
-                sentence_html = f'<span style="{highlighted_style}">{sentence.strip()}{"." if not sentence.strip().endswith(".") else ""}</span>'
-                highlighted_sentence.append(sentence_html)
-            paragraph_content = ' '.join(highlighted_sentence)
-            html_content += f"<div style='{font_style}'>{paragraph_content}</div>"
+        # Get the HTML content
+        if isinstance(content, Tag):
+            element_html = str(content)
         else:
-            # Include any images or captions in the paragraph_html
-            html_content += f"<div style='{font_style}'>{paragraph_text}</div>"
+            element_html = content
+
+        if elem_type == 'paragraph':
+            if is_highlighted:
+                # Get text content for sentence splitting
+                text_content = content.get_text(separator=' ')
+                sentences = split_sentences(text_content)
+
+                # Apply highlighting to sentences
+                highlighted_sentence = []
+                for j, sentence in enumerate(sentences):
+                    color_variable = f"var(--color-{j%5 +1})"
+                    highlighted_style = f"""
+                        background-color: {color_variable};
+                        padding: 2px 5px;
+                        border-radius: 5px;
+                        color: var(--text-color);
+                        position: relative;
+                        z-index: 1;
+                    """
+                    sentence_html = f'<span style="{highlighted_style}">{sentence.strip()}</span>'
+                    highlighted_sentence.append(sentence_html)
+                paragraph_content = ' '.join(highlighted_sentence)
+                html_content += f"<div style='{font_style}'>{paragraph_content}</div>"
+            else:
+                # Display non-highlighted paragraph
+                html_content += f"<div style='{font_style}'>{element_html}</div>"
+        elif elem_type == 'heading':
+            # Display headings
+            heading_tag = content.name
+            html_content += f"<{heading_tag}>{content.get_text(strip=True)}</{heading_tag}>"
+        elif elem_type == 'image':
+            # Display images
+            html_content += f"<div style='text-align: center;'>{element_html}</div>"
+        elif elem_type == 'caption':
+            # Display captions
+            caption_style = font_style + "font-style: italic;"
+            html_content += f"<div style='{caption_style}'>{content.get_text(strip=True)}</div>"
+        else:
+            # Display other elements
+            html_content += f"<div style='{font_style}'>{element_html}</div>"
 
     # Display the HTML content using Streamlit
     st.write(html_content, unsafe_allow_html=True)
 
 def main():
-
     # Inject CSS styles
     st.markdown("""
     <style>
@@ -185,8 +239,12 @@ def main():
 
             # Parse the HTML content of the chapter
             soup = BeautifulSoup(selected_item.get_body_content(), 'html.parser')
-            # Use the get_processed_paragraphs function to get paragraphs
-            chapter_paragraphs = get_processed_paragraphs(soup)
+
+            # Use the get_processed_elements function to get elements
+            chapter_elements = get_processed_elements(soup)
+
+            # Build a list of indices of paragraphs in chapter_elements
+            paragraph_indices = [i for i, elem in enumerate(chapter_elements) if elem['type'] == 'paragraph']
 
             # Initialize session state for the paragraph index
             if 'current_paragraph' not in st.session_state:
@@ -200,11 +258,11 @@ def main():
                         st.session_state.current_paragraph -= 1
             with col3:
                 if st.button("Next"):
-                    if st.session_state.current_paragraph + 1 < len(chapter_paragraphs):
+                    if st.session_state.current_paragraph + 1 < len(paragraph_indices):
                         st.session_state.current_paragraph += 1
 
             # Display the paragraphs
-            display_paragraphs(st.session_state.current_paragraph, chapter_paragraphs)
+            display_paragraphs(st.session_state.current_paragraph, chapter_elements, paragraph_indices)
         else:
             st.error("No readable content found in the EPUB file.")
             return
