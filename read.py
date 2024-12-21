@@ -6,6 +6,32 @@ import tempfile
 import os
 import re
 
+
+def get_toc_map(book):
+    """
+    Creates a mapping from href to title using the book's table of contents (toc).
+    """
+    toc_map = {}
+
+    def parse_toc_entries(entries):
+        for entry in entries:
+            if isinstance(entry, epub.Link):
+                href = entry.href.split("#")[0]  # Remove anchor if present
+                title = entry.title
+                toc_map[href] = title
+            elif isinstance(entry, epub.Section):
+                href = entry.href.split("#")[0]
+                title = entry.title
+                toc_map[href] = title
+                # Recursively parse nested entries
+                parse_toc_entries(entry.subitems)
+            elif isinstance(entry, (list, tuple)):
+                parse_toc_entries(entry)
+
+    parse_toc_entries(book.toc)
+    return toc_map
+
+
 def get_processed_elements(soup):
     """
     Processes the HTML soup and returns a list of elements.
@@ -253,21 +279,29 @@ def main():
             # Clean up the temporary file
             os.remove(tmp_file_path)
 
+        # Create a mapping from href to title using the table of contents
+        toc_map = get_toc_map(book)
+
         # Initialize the chapter content
         chapters = []
         chapter_titles = []
         for item in book.get_items():
             if item.get_type() == ebooklib.ITEM_DOCUMENT:
                 chapters.append(item)
-                # Attempt to get the chapter title
-                title = None
-                # Try to get title from item's metadata
-                if 'title' in item.get_metadata():
-                    title = item.get_metadata('title')[0][0]
+                # Get the href of the item
+                href = item.get_name()
+                # Adjust href in case it starts with '/'
+                href = href.lstrip('/')
+                # Look up the title in the toc_map
+                title = toc_map.get(href, None)
                 if not title:
-                    title = item.get_name()
-                if not title:
-                    title = f"Chapter {len(chapter_titles)+1}"
+                    # Try to get the title from the HTML content
+                    soup = BeautifulSoup(item.get_content(), 'html.parser')
+                    if soup.title:
+                        title = soup.title.string.strip()
+                    else:
+                        # Use a default title
+                        title = f"Chapter {len(chapter_titles)+1}"
                 chapter_titles.append(title)
 
         if chapters:
@@ -277,7 +311,7 @@ def main():
             selected_item = chapters[chapter_index]
 
             # Parse the HTML content of the chapter
-            soup = BeautifulSoup(selected_item.get_body_content(), 'html.parser')
+            soup = BeautifulSoup(selected_item.get_content(), 'html.parser')
             # Use the get_processed_elements function to get elements
             chapter_elements = get_processed_elements(soup)
 
